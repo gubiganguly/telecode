@@ -1,0 +1,11 @@
+{
+  "last_full_scan": "2026-02-20T21:00:00Z",
+  "last_updated": "2026-02-21T22:00:00Z",
+  "scan_type": "incremental",
+  "git_hash": null,
+  "features_documented": [
+    "github-integration",
+    "mentions-system",
+    "claude-md-management"
+  ]
+}

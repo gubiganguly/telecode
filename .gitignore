@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+backend/venv/
+
+# Encryption master key
+backend/data/.master.key
+
+# Database
+backend/data/*.db
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+
+# Node
+node_modules/
+
+# Next.js
+.next/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Temp files
+stderr.tmp

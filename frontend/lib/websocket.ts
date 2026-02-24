@@ -32,7 +32,11 @@ class WebSocketManager {
 
     try {
       const token = getToken();
-      const url = token ? `${WS_URL}?token=${encodeURIComponent(token)}` : WS_URL;
+      if (!token) {
+        this.setStatus("disconnected");
+        return;
+      }
+      const url = `${WS_URL}?token=${encodeURIComponent(token)}`;
       this.ws = new WebSocket(url);
     } catch {
       this.setStatus("reconnecting");

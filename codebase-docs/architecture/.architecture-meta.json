@@ -1,11 +1,19 @@
 {
-  "last_full_scan": "2026-02-20T21:00:00Z",
-  "last_updated": "2026-02-21T22:00:00Z",
-  "scan_type": "incremental",
-  "git_hash": null,
+  "last_full_scan": "2026-02-23T00:00:00Z",
+  "last_updated": "2026-02-23T00:00:00Z",
+  "scan_type": "full",
+  "git_hash": "6bb6907",
   "features_documented": [
+    "authentication",
+    "chat-websocket",
+    "claude-cli-integration",
+    "mentions",
     "github-integration",
-    "mentions-system",
-    "claude-md-management"
+    "deployment",
+    "api-keys",
+    "commands",
+    "mcps",
+    "file-tree",
+    "claude-md"
   ]
 }

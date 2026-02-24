@@ -1,272 +1,212 @@
-# Project Architecture
+# Telecode — Architecture
 
-> Auto-generated architecture overview. Last updated: 2026-02-21
+> Auto-generated architecture overview. Last updated: 2026-02-23
 >
 > Entry point for developers and AI coding agents to understand the full system.
 
 ## System Overview
 
-**Telecode** is a remote control web app for [Claude Code](https://code.claude.com). It wraps the Claude Code CLI (`claude -p`) in a FastAPI backend, exposing it over WebSocket so a Next.js frontend can provide a full coding assistant experience from anywhere. Claude Code reads/writes files locally on the host machine while the user interacts through a web UI.
+**Telecode** is a web-based remote control for [Claude Code](https://code.claude.com). It wraps the Claude Code CLI (`claude -p`) in a FastAPI backend, exposing it over WebSocket so a Next.js frontend can provide a full coding assistant experience from any device — phone, tablet, or laptop.
 
 **Core idea:** User's browser → WebSocket → FastAPI backend → spawns `claude -p` subprocess → Claude edits files on the server → streams results back to the browser.
+
+**Deployment model:** Single-user, self-hosted. Runs on a personal Mac (Mini/Pro/Studio) exposed to the internet via Cloudflare Tunnel, protected by password-based JWT auth. Auto-starts on boot via macOS launchd.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Next.js 16.1 + React 19.2 + TypeScript 5 |
-| State Management | Zustand 5 (with Immer middleware) |
-| Animations | Framer Motion 12 |
-| Styling | Tailwind CSS 4 |
-| Markdown | react-markdown 10 + rehype-highlight + remark-gfm |
-| Icons | Lucide React |
-| Backend | Python 3.11 + FastAPI 0.115 |
-| Database | SQLite (via aiosqlite, WAL mode) |
-| Encryption | cryptography (Fernet) for API key storage |
-| AI Title Gen | anthropic SDK (Claude Haiku) for auto-titling sessions |
-| CLI Integration | Claude Code CLI (`claude -p --output-format stream-json`) |
-| Real-time | WebSocket (native FastAPI/Starlette) |
+| Frontend | Next.js 16, React 19, TypeScript (strict) |
+| State | Zustand 5 + Immer |
+| UI | Tailwind CSS 4, Framer Motion 12, Lucide icons |
+| Editor | Tiptap (rich text input with @mentions) |
+| Markdown | react-markdown + rehype-highlight + remark-gfm |
+| Backend | Python 3.11+, FastAPI 0.115, Uvicorn |
+| Database | SQLite (WAL mode) via aiosqlite |
+| Auth | JWT (HS256) via PyJWT |
+| Encryption | Fernet (cryptography) for API keys at rest |
+| AI Titles | Anthropic SDK (Claude Haiku) for session auto-titling |
+| CLI | Claude Code CLI (`claude -p --output-format stream-json`) |
 | Config | pydantic-settings (env vars with `TELECODE_` prefix) |
+| Tunnel | Cloudflare Tunnel (cloudflared) |
+| Service | macOS launchd for auto-start on boot |
 
 ## Project Structure
 
 ```
 telecode/
-├── .claude/
-│   ├── CLAUDE.md                              # Project conventions
-│   └── commands/
-│       ├── architecture.md                    # /architecture command
-│       └── api-docs.md                        # /api-docs command
+├── frontend/                   # Next.js app
+│   ├── app/                    # App Router pages
+│   │   ├── page.tsx            # Root → redirects to /projects
+│   │   ├── layout.tsx          # Root layout (fonts, providers, AuthGuard)
+│   │   ├── login/page.tsx      # Password login
+│   │   ├── projects/page.tsx   # Project list + create
+│   │   ├── chat/[projectId]/page.tsx  # Main chat interface
+│   │   └── settings/page.tsx   # API keys, commands, MCPs, GitHub, CLAUDE.md
+│   ├── components/
+│   │   ├── ui/                 # Base primitives (Button, Input, Dialog, Badge, Skeleton)
+│   │   ├── layout/             # AppProviders (Zustand + WS), ConnectionStatus
+│   │   ├── auth/               # AuthGuard (route protection)
+│   │   ├── chat/               # 15 components: ChatArea, ChatInput, MessageList, MarkdownRenderer,
+│   │   │                       #   ToolUseCard, ThinkingBlock, TodoCard, AskUserQuestionCard,
+│   │   │                       #   TypingIndicator, ModelSelector, SlashCommandPalette,
+│   │   │                       #   MentionSuggestionList, MentionChip, WelcomeScreen, ChatHeader
+│   │   ├── projects/           # ProjectCard, CreateProjectDialog, EmptyState
+│   │   ├── sessions/           # SessionSidebar, SessionItem
+│   │   ├── files/              # FileTreePanel, FileTreeNode
+│   │   └── settings/           # 12 components: sidebar, tab bar, 5 section containers,
+│   │                           #   command/API key/MCP CRUD dialogs, GitHub section
+│   ├── hooks/                  # 16 custom hooks (useChat, useWebSocket, useMentions, etc.)
+│   ├── lib/                    # Core utilities
+│   │   ├── store.ts            # Zustand global state
+│   │   ├── websocket.ts        # WebSocket manager singleton
+│   │   ├── api.ts              # REST API client (with JWT auth headers)
+│   │   ├── auth.ts             # JWT token helpers (localStorage)
+│   │   └── constants.ts        # Models, URLs, slash commands
+│   └── types/                  # TypeScript interfaces (api.ts, chat.ts, mentions.ts)
 │
 ├── backend/
-│   ├── requirements.txt                       # Python dependencies
-│   ├── data/
-│   │   ├── telecode.db                        # SQLite database (runtime)
-│   │   └── .master.key                        # Fernet encryption key (runtime, 600 perms)
-│   ├── venv/                                  # Python virtual environment
-│   └── src/
-│       ├── main.py                            # FastAPI app, lifespan, middleware, router registration
-│       ├── api/
-│       │   ├── health/router.py               # GET /api/health
-│       │   ├── projects/router.py             # CRUD /api/projects
-│       │   ├── sessions/router.py             # CRUD /api/sessions
-│       │   ├── chat/router.py                 # WS /ws/chat (WebSocket)
-│       │   ├── api_keys/router.py             # CRUD /api/keys
-│       │   ├── commands/router.py             # CRUD /api/commands + AI generation
-│       │   ├── mcps/router.py                 # GET /api/mcps, POST /api/mcps/install
-│       │   ├── files/router.py                # GET /api/projects/{id}/files (file tree)
-│       │   ├── claude_md/router.py            # GET/PUT /api/claude-md
-│       │   ├── mentions/router.py             # POST /api/mentions/fetch-url
-│       │   └── github/router.py               # OAuth + repo operations /api/github
-│       ├── schemas/
-│       │   ├── common.py                      # APIResponse[T] generic wrapper
-│       │   ├── projects.py                    # ProjectCreate, ProjectInfo, ProjectListResponse
-│       │   ├── sessions.py                    # SessionCreate, SessionInfo, SessionListResponse
-│       │   ├── chat.py                        # WebSocket message types (inbound + outbound enums)
-│       │   ├── api_keys.py                    # ApiKeyCreate, ApiKeyInfo, ApiKeyListResponse
-│       │   ├── commands.py                    # CommandInfo, CommandCreate, CommandGenerateRequest
-│       │   ├── mcps.py                        # McpServerConfig, McpInstallRequest/Response
-│       │   ├── files.py                       # FileNode, FileTreeResponse
-│       │   ├── claude_md.py                   # ClaudeMdResponse, ClaudeMdUpdate
-│       │   ├── mentions.py                    # UrlFetchRequest/Response
-│       │   └── github.py                      # GitHubAccountInfo, CreateRepoRequest, PushRequest
-│       ├── services/
-│       │   ├── claude/
-│       │   │   ├── process_manager.py         # Spawns/tracks/kills claude CLI subprocesses
-│       │   │   ├── stream_parser.py           # Parses NDJSON stream from CLI into typed events
-│       │   │   └── command_translator.py      # Maps /slash commands to natural language prompts
-│       │   ├── chat/title_generator.py        # Auto-generates session titles via Anthropic API
-│       │   ├── commands/command_service.py     # Custom command CRUD (filesystem) + AI generation
-│       │   ├── mcps/mcp_service.py            # MCP listing + natural language install
-│       │   ├── projects/project_service.py    # Project CRUD, template copying, filesystem sync, git ops
-│       │   ├── sessions/session_service.py    # Session CRUD, metadata updates
-│       │   ├── api_keys/api_key_service.py    # Encrypted API key storage, CRUD, env injection
-│       │   ├── github/github_service.py       # GitHub OAuth, repo CRUD, token management
-│       │   └── claude_md/claude_md_service.py # CLAUDE.md read/write/sync across projects
-│       ├── core/
-│       │   ├── config.py                      # Settings class (pydantic-settings)
-│       │   ├── database.py                    # SQLite connection, schema creation (3 tables)
-│       │   ├── encryption.py                  # Fernet encryption for API key values
-│       │   ├── exceptions.py                  # Custom exceptions + FastAPI handlers
-│       │   └── security.py                    # Auth stubs (disabled for now)
-│       └── utils/
-│           └── helpers.py                     # slugify()
+│   ├── src/
+│   │   ├── main.py             # FastAPI app, lifespan, CORS, router registration, auth deps
+│   │   ├── api/                # Route handlers
+│   │   │   ├── auth/           # POST /api/auth/login (no auth required)
+│   │   │   ├── health/         # GET /api/health (no auth required)
+│   │   │   ├── chat/           # WebSocket /ws/chat (token in query param)
+│   │   │   ├── projects/       # CRUD /api/projects (JWT protected)
+│   │   │   ├── sessions/       # CRUD /api/sessions (JWT protected)
+│   │   │   ├── api_keys/       # CRUD /api/keys (JWT protected)
+│   │   │   ├── commands/       # CRUD /api/commands (JWT protected)
+│   │   │   ├── mcps/           # GET/POST /api/mcps (JWT protected)
+│   │   │   ├── files/          # File tree, search, content (JWT protected)
+│   │   │   ├── mentions/       # URL fetch, SSRF-protected (JWT protected)
+│   │   │   ├── claude_md/      # GET/PUT /api/claude-md (JWT protected)
+│   │   │   └── github/         # OAuth + repo operations (mixed auth)
+│   │   ├── services/           # Business logic (8 services)
+│   │   │   ├── claude/         # ProcessManager, StreamParser, CommandTranslator
+│   │   │   ├── projects/       # ProjectService
+│   │   │   ├── sessions/       # SessionService
+│   │   │   ├── api_keys/       # ApiKeyService (encrypted storage)
+│   │   │   ├── commands/       # CommandService
+│   │   │   ├── mcps/           # McpService
+│   │   │   ├── chat/           # TitleGenerator
+│   │   │   ├── claude_md/      # ClaudeMdService
+│   │   │   └── github/         # GitHubService (OAuth, repos)
+│   │   ├── schemas/            # Pydantic v2 models (12 files)
+│   │   ├── core/               # Config, database, security, encryption, exceptions
+│   │   └── utils/helpers.py    # slugify()
+│   ├── data/                   # SQLite DB + master key (gitignored)
+│   └── requirements.txt
 │
-├── frontend/
-│   ├── package.json                           # Next.js 16 + React 19 + deps
-│   ├── tsconfig.json                          # TypeScript config with path aliases
-│   ├── next.config.ts                         # Next.js config
-│   ├── app/
-│   │   ├── layout.tsx                         # Root layout (Inter + JetBrains Mono fonts)
-│   │   ├── page.tsx                           # Home → redirects to /projects
-│   │   ├── globals.css                        # Tailwind directives + global styles
-│   │   ├── projects/page.tsx                  # Projects listing with grid cards
-│   │   ├── settings/page.tsx                  # API key management page
-│   │   └── chat/[projectId]/page.tsx          # Chat interface (dynamic route)
-│   ├── components/
-│   │   ├── ui/                                # Primitives: button, input, dialog, badge, skeleton
-│   │   ├── layout/
-│   │   │   ├── app-providers.tsx              # Zustand + WebSocket provider wrapper
-│   │   │   └── connection-status.tsx          # Backend connection indicator
-│   │   ├── chat/                              # Chat UI (14 components)
-│   │   │   ├── chat-area.tsx                  # Main chat display container
-│   │   │   ├── chat-header.tsx                # Session/project info header
-│   │   │   ├── chat-input.tsx                 # Message textarea with slash commands
-│   │   │   ├── chat-message.tsx               # Individual message renderer
-│   │   │   ├── message-list.tsx               # Scrollable message container
-│   │   │   ├── markdown-renderer.tsx          # Markdown + code syntax highlighting
-│   │   │   ├── thinking-block.tsx             # Collapsible thinking visualization
-│   │   │   ├── tool-use-card.tsx              # Tool invocation display
-│   │   │   ├── todo-card.tsx                  # TodoWrite tool progress checklist
-│   │   │   ├── ask-user-question-card.tsx     # Interactive AskUserQuestion card
-│   │   │   ├── typing-indicator.tsx           # Animated typing indicator
-│   │   │   ├── model-selector.tsx             # Model dropdown (Opus/Sonnet/Haiku)
-│   │   │   ├── slash-command-palette.tsx       # Command palette for /commands
-│   │   │   └── welcome-screen.tsx             # Empty state for new sessions
-│   │   ├── files/                             # File tree UI (2 components)
-│   │   │   ├── file-tree-panel.tsx            # Right-side collapsible file tree panel
-│   │   │   └── file-tree-node.tsx             # Recursive tree node (file/directory)
-│   │   ├── projects/                          # Project UI (3 components)
-│   │   │   ├── project-card.tsx               # Project card in grid
-│   │   │   ├── create-project-dialog.tsx      # New project modal
-│   │   │   └── empty-state.tsx                # No projects landing
-│   │   ├── sessions/                          # Session UI (2 components)
-│   │   │   ├── session-item.tsx               # Session list entry
-│   │   │   └── session-sidebar.tsx            # Left sidebar with session list
-│   │   └── settings/                          # Settings UI (10 components)
-│   │       ├── settings-sidebar.tsx           # Desktop sidebar with section nav
-│   │       ├── settings-tab-bar.tsx           # Mobile tab bar for section switching
-│   │       ├── settings-commands-section.tsx   # Commands management section
-│   │       ├── settings-api-keys-section.tsx   # API keys management section
-│   │       ├── settings-mcps-section.tsx       # MCPs management section
-│   │       ├── command-list.tsx               # Custom command table with actions
-│   │       ├── command-create-dialog.tsx       # Create/edit command modal (+ AI gen)
-│   │       ├── mcp-list.tsx                   # Installed MCP server list
-│   │       ├── mcp-install-dialog.tsx         # Natural language MCP install dialog
-│   │       ├── api-key-dialog.tsx             # Create/edit API key modal
-│   │       └── api-key-list.tsx               # API key table with actions
-│   ├── hooks/
-│   │   ├── use-api-keys.ts                    # API key CRUD operations
-│   │   ├── use-chat.ts                        # Chat message handling
-│   │   ├── use-projects.ts                    # Project management
-│   │   ├── use-sessions.ts                    # Session management
-│   │   ├── use-websocket.ts                   # WebSocket connection lifecycle
-│   │   ├── use-mobile.ts                      # Mobile viewport detection
-│   │   ├── use-typewriter.ts                  # Typing animation effect
-│   │   ├── use-thinking-phrase.ts             # Rotating thinking phrases
-│   │   ├── use-commands.ts                    # Custom command CRUD operations
-│   │   ├── use-mcps.ts                        # MCP listing
-│   │   ├── use-slash-commands.ts              # Dynamic slash command list from API
-│   │   ├── use-file-tree.ts                   # File tree data with 5s polling
-│   │   ├── use-github.ts                      # GitHub OAuth status, connect/disconnect
-│   │   ├── use-claude-md.ts                   # CLAUDE.md content management
-│   │   ├── use-mention-resolver.ts            # Resolve @mentions to file/folder/URL content
-│   │   └── use-mention-search.ts              # Search files for @mention suggestions
-│   ├── lib/
-│   │   ├── store.ts                           # Zustand global state (projects, sessions, chat)
-│   │   ├── api.ts                             # HTTP API client (fetch-based)
-│   │   ├── websocket.ts                       # WebSocket manager (singleton, auto-reconnect)
-│   │   ├── constants.ts                       # URLs, models, slash commands, breakpoints
-│   │   └── utils.ts                           # cn() helper (clsx + tailwind-merge)
-│   ├── types/
-│   │   ├── api.ts                             # API schema types (mirrors backend schemas)
-│   │   ├── chat.ts                            # Chat types (messages, events, tool use)
-│   │   └── mentions.ts                        # Mention types (file, folder, url)
-│   └── public/                                # Static assets
+├── service/                    # macOS launchd auto-start
+│   ├── com.telecode.plist      # Service definition (template with __TELECODE_DIR__)
+│   ├── install.sh              # Register with launchctl
+│   └── uninstall.sh            # Unregister
 │
-└── codebase-docs/
-    ├── architecture/
-    │   ├── ARCHITECTURE.md                    # This file
-    │   └── .architecture-meta.json
-    └── api/
-        └── .gitkeep
+├── start.sh                    # Start all services (backend + frontend + tunnel)
+├── stop.sh                     # Stop all services
+├── status.sh                   # Check what's running
+├── setup.sh                    # Interactive first-time setup
+├── .env.production             # Production env vars (gitignored)
+├── .env.production.example     # Template for env vars
+└── codebase-docs/              # Auto-generated docs
+    └── architecture/
+        └── ARCHITECTURE.md     # This file
 ```
 
 ## Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      User's Browser (:3000)                      │
-│                     Next.js 16 + React 19                        │
-│                                                                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
-│  │  /projects   │  │  /chat/:id   │  │  /settings   │           │
-│  │  (REST)      │  │  (WebSocket) │  │  (REST)      │           │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘           │
-│         │                 │                  │                   │
-│  ┌──────┴─────────────────┴──────────────────┴───────┐           │
-│  │              Zustand Store (Immer)                 │           │
-│  │  projects[] | sessions[] | messages{} | isStreaming│           │
-│  └──────┬─────────────────┬──────────────────┬───────┘           │
-│         │                 │                  │                   │
-│  ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴───────┐           │
-│  │  ApiClient   │  │  WsManager   │  │  ApiClient   │           │
-│  │  (fetch)     │  │  (singleton) │  │  (fetch)     │           │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘           │
-└─────────┼─────────────────┼──────────────────┼───────────────────┘
-          │ HTTP            │ WS               │ HTTP
-          ▼                 ▼                  ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    FastAPI Backend (:8000)                        │
-│                                                                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
-│  │ /api/projects│  │ /ws/chat     │  │ /api/keys    │           │
-│  │ /api/sessions│  │ (WebSocket)  │  │ /api/commands│           │
-│  │ /api/files   │  │              │  │ /api/mcps    │           │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘           │
-│         │                 │                  │                   │
-│         ▼                 ▼                  ▼                   │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
-│  │ProjectService│  │ProcessManager│  │ApiKeyService │           │
-│  │SessionService│  │              │  │CommandService│           │
-│  │              │  │ • spawn CLI  │  │McpService    │           │
-│  │ • CRUD       │  │ • parse NDJSON│ │              │           │
-│  │ • copy .claude│ │ • inject keys│  │ • encrypt    │           │
-│  │ • git init   │  │ • cancel     │  │ • CRUD cmds  │           │
-│  │ • fs sync    │  │ • track procs│  │ • install MCP│           │
-│  │ • file tree  │  │ • title gen  │  │ • AI gen     │           │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘           │
-│         │                 │                  │                   │
-│         └────────┬────────┘──────────────────┘                   │
-│                  ▼                                                │
-│         ┌──────────────┐  ┌──────────────┐                       │
-│         │   SQLite DB   │  │  Encryption  │                      │
-│         │  (WAL mode)   │  │  (Fernet)    │                      │
-│         │  • projects   │  │              │                      │
-│         │  • sessions   │  │  .master.key │                      │
-│         │  • api_keys   │  │              │                      │
-│         └──────────────┘  └──────────────┘                       │
-│                                                                  │
-│         ┌──────────────────────────────┐                         │
-│         │  claude -p "<prompt>"        │                          │
-│         │    --output-format stream-json│                         │
-│         │    --session-id <uuid>       │                          │
-│         │    --model <model-id>        │                          │
-│         │    --allowedTools Read Write…│                          │
-│         │    cwd=/Claude Code Projects/│                          │
-│         │        <project-slug>/       │                          │
-│         │  env: API keys injected      │                          │
-│         └──────────────┬───────────────┘                         │
-└────────────────────────┼─────────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────┐
-│   Local Filesystem                  │
-│   ~/Claude Code Projects/           │
-│   ├── project-a/                    │
-│   │   ├── .claude/                  │
-│   │   │   ├── CLAUDE.md             │
-│   │   │   └── settings.json         │
-│   │   └── (project files)           │
-│   ├── project-b/                    │
-│   └── .templates/                   │
-│       └── .claude/                  │
-│           ├── CLAUDE.md             │
-│           ├── settings.json         │
-│           └── commands/             │
-│               └── (custom .md files)│
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                    Client (Browser/Phone)                     │
+│                     Next.js 16 + React 19                    │
+│                                                               │
+│  ┌──────────┐  ┌──────────────────┐  ┌───────────┐          │
+│  │  /login   │  │  /chat/[id]      │  │ /settings │          │
+│  │  (REST)   │  │  (WS + REST)     │  │ (REST)    │          │
+│  └────┬──────┘  └───────┬──────────┘  └─────┬─────┘          │
+│       │                 │                    │                │
+│  ┌────┴─────────────────┴────────────────────┴──────┐        │
+│  │              Zustand Store (Immer)                 │        │
+│  │  projects[] | sessions[] | messages{} | isStreaming│        │
+│  └────┬─────────────────┬────────────────────┬──────┘        │
+│       │                 │                    │                │
+│  ┌────┴───────┐  ┌──────┴───────┐  ┌────────┴──────┐        │
+│  │ ApiClient  │  │ WsManager    │  │ AuthGuard     │        │
+│  │ (fetch)    │  │ (singleton)  │  │ (JWT check)   │        │
+│  └────┬───────┘  └──────┬───────┘  └───────────────┘        │
+└───────┼─────────────────┼────────────────────────────────────┘
+        │ HTTPS           │ WSS
+        ▼                 ▼
+┌───────────────────────────────┐
+│     Cloudflare Tunnel         │
+│     casperbot.net             │
+│                               │
+│  /api/* → localhost:8000      │
+│  /ws/*  → localhost:8000      │
+│  /*     → localhost:3000      │
+└───────────┬───────────────────┘
+            │
+┌───────────┼─────────────────────────────────────────────────┐
+│           │          FastAPI Backend (:8000)                  │
+│           ▼                                                   │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │ Auth Router  │  │ Chat Router  │  │ REST Routers │       │
+│  │ (login)      │  │ (WebSocket)  │  │ (CRUD)       │       │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘       │
+│         │                 │                  │                │
+│  ┌──────┴───────┐  ┌──────┴───────┐  ┌──────┴───────┐       │
+│  │ Security     │  │ProcessManager│  │ Services     │       │
+│  │ (JWT/PyJWT)  │  │              │  │              │       │
+│  └──────────────┘  │ • spawn CLI  │  │ • Projects   │       │
+│                    │ • parse JSON │  │ • Sessions   │       │
+│                    │ • inject keys│  │ • API Keys   │       │
+│                    │ • cancel     │  │ • Commands   │       │
+│                    └──────┬───────┘  │ • GitHub     │       │
+│                           │          └──────┬───────┘       │
+│                           ▼                 │                │
+│                    ┌──────────────┐  ┌──────┴───────┐       │
+│                    │ claude CLI   │  │   SQLite DB   │       │
+│                    │ subprocess   │  │   (WAL mode)  │       │
+│                    └──────────────┘  └──────────────┘       │
+└──────────────────────────────────────────────────────────────┘
 ```
+
+## Authentication & Authorization
+
+JWT-based auth protects all endpoints except health check and login.
+
+### Flow
+
+```
+User → POST /api/auth/login { password }
+    ↓ compare against TELECODE_AUTH_PASSWORD env var
+Backend → create_access_token() → JWT (HS256, 30d expiry)
+    ↓
+Frontend → localStorage.setItem('telecode_token', jwt)
+    ↓
+All REST requests → Authorization: Bearer <jwt>
+WebSocket → wss://domain/ws/chat?token=<jwt>
+```
+
+### Implementation
+
+| Component | File | What it does |
+|-----------|------|-------------|
+| JWT creation/verification | `backend/src/core/security.py` | `create_access_token()`, `verify_token()`, `get_current_user()` dependency |
+| Login endpoint | `backend/src/api/auth/router.py` | `POST /api/auth/login` — validates password, returns JWT |
+| Route protection | `backend/src/main.py` | `dependencies=[Depends(get_current_user)]` on protected routers |
+| WebSocket auth | `backend/src/api/chat/router.py` | `authenticate_websocket(token)` before accepting connection |
+| Token storage | `frontend/lib/auth.ts` | `getToken()`, `setToken()`, `clearToken()`, `isAuthenticated()` |
+| Auth guard | `frontend/components/auth/auth-guard.tsx` | Redirects to `/login` if no valid token |
+| API auth headers | `frontend/lib/api.ts` | `authHeaders()` adds Bearer token to all requests |
+| WS auth | `frontend/lib/websocket.ts` | Appends `?token=` to WS URL; handles 1008 close code |
+
+### Auth rules
+
+- **Public:** `GET /api/health`, `POST /api/auth/login`, GitHub OAuth callback
+- **JWT required:** All other REST endpoints (applied via router dependency)
+- **WebSocket:** Token in query param, validated before `accept()`. Close code 1008 on failure.
+- **Frontend:** `AuthGuard` wraps all routes. Login page is public. No token → no WebSocket connection.
 
 ## Frontend Architecture
 
@@ -275,471 +215,318 @@ telecode/
 | Route | File | Description |
 |-------|------|-------------|
 | `/` | `app/page.tsx` | Redirects to `/projects` |
+| `/login` | `app/login/page.tsx` | Password login, stores JWT, connects WebSocket |
 | `/projects` | `app/projects/page.tsx` | Project listing grid with create dialog |
-| `/chat/[projectId]` | `app/chat/[projectId]/page.tsx` | Chat interface with session sidebar |
-| `/settings` | `app/settings/page.tsx` | Settings hub: CLAUDE.md, Commands, API Keys, MCPs, GitHub (5-section layout) |
-
-### Components
-
-39 components organized by domain:
-
-- **UI primitives** (`components/ui/`): `button`, `input`, `dialog`, `badge`, `skeleton` — reusable base components
-- **Layout** (`components/layout/`): `app-providers` (Zustand + WS bootstrap), `connection-status` (live connection indicator)
-- **Chat** (`components/chat/`): 14 components covering the full chat experience — message rendering with markdown/syntax highlighting, thinking blocks, tool use cards, todo progress checklist, interactive question cards, model selector, slash command palette, typing indicator, welcome screen
-- **Files** (`components/files/`): `file-tree-panel` (right-side collapsible panel), `file-tree-node` (recursive tree renderer)
-- **Projects** (`components/projects/`): `project-card`, `create-project-dialog`, `empty-state`
-- **Sessions** (`components/sessions/`): `session-sidebar` (list + create/delete/rename), `session-item`
-- **Settings** (`components/settings/`): 12 components — sidebar nav, mobile tab bar, 5 section containers (CLAUDE.md, commands, API keys, MCPs, GitHub), command CRUD + AI generation, MCP install, API key management, GitHub OAuth connection
+| `/chat/[projectId]` | `app/chat/[projectId]/page.tsx` | Chat interface with session sidebar + file tree |
+| `/settings` | `app/settings/page.tsx` | 5-section settings: API Keys, Commands, MCPs, GitHub, CLAUDE.md |
 
 ### State Management
 
-Zustand store (`lib/store.ts`) with Immer middleware. Single global store managing:
+Zustand + Immer via `lib/store.ts`:
 
 ```typescript
 interface AppState {
   // Data
-  projects: ProjectInfo[];          // Project list
-  currentProject: ProjectInfo | null; // Active project detail
-  sessions: SessionInfo[];          // Sessions for current project
-  activeSessionId: string | null;   // Currently selected session
-  isDraftMode: boolean;             // New-session draft mode
-  selectedModel: string;            // Claude model selection
-  messages: Record<string, ChatMessage[]>;  // Messages keyed by session ID
-  isStreaming: Record<string, boolean>;     // Streaming state per session
+  projects: ProjectInfo[];
+  currentProject: ProjectInfo | null;
+  sessions: SessionInfo[];
+  activeSessionId: string | null;
+  isDraftMode: boolean;
+  selectedModel: string;
+  messages: Record<string, ChatMessage[]>;
+  isStreaming: Record<string, boolean>;
 
   // Actions
-  fetchProjects, fetchProject, createProject, deleteProject
-  fetchSessions, createSession, deleteSession, renameSession, enterDraftMode
+  fetchProjects, createProject, deleteProject
+  fetchSessions, createSession, deleteSession, renameSession
   sendMessage, cancelRequest, handleWsEvent
 }
 ```
 
-The store handles all WebSocket event routing — `handleWsEvent()` maps server events to state mutations (appending text deltas, tracking tool use, marking completion). Also handles `session_renamed` events for auto-generated titles.
-
-### API Client & Data Fetching
-
-`lib/api.ts` — fetch-based `ApiClient` class. All REST calls unwrap `APIResponse<T>` and throw on error:
-
-```typescript
-const api = new ApiClient(API_BASE_URL);  // http://localhost:8000
-api.listProjects();    // GET /api/projects
-api.createSession();   // POST /api/sessions
-api.listApiKeys();     // GET /api/keys
-api.listCommands();    // GET /api/commands
-api.listMcps();        // GET /api/mcps
-api.getFileTree(id);   // GET /api/projects/{id}/files
-```
+`handleWsEvent()` routes all WebSocket events to state mutations — appending text deltas, tracking tool use, marking completion, handling session creation/rename.
 
 ### WebSocket Client
 
-`lib/websocket.ts` — singleton `WebSocketManager` connecting to `ws://localhost:8000/ws/chat`:
+`lib/websocket.ts` — singleton `WebSocketManager`:
+- Connects to `WS_URL` with JWT in query param
+- Exponential backoff reconnection (1s base → 30s max, with jitter)
+- Ping/pong keepalive every 25s
+- Close code 1008 → clear token, redirect to `/login`
+- No token → stays disconnected (avoids redirect loop)
+- After login, `wsManager.connect()` called explicitly
 
-- Auto-reconnect with exponential backoff (1s base, 30s max, jitter)
-- Ping/pong keep-alive every 25s
-- Connection status observable (`connecting | connected | disconnected | reconnecting`)
-- Events forwarded to Zustand store via `onEvent()` handler
-- `send()` returns `false` when disconnected (store shows inline error)
+### API Client
+
+`lib/api.ts` — `ApiClient` class:
+- All REST calls use relative paths (`/api/...`) proxied by Next.js rewrites to backend
+- JWT Bearer token automatically attached via `authHeaders()`
+- 401 → clear token, redirect to `/login`
 
 ### Styling
 
-Tailwind CSS 4 with PostCSS plugin. Fonts: Inter (body) + JetBrains Mono (code). `cn()` utility via `clsx` + `tailwind-merge`. Framer Motion used throughout for page transitions, skeleton loaders, hover states, and micro-interactions.
+- Tailwind CSS 4 with CSS variables for dark theme
+- Framer Motion for page transitions, typewriter streaming, micro-interactions
+- Fonts: Inter (UI) + JetBrains Mono (code)
+- Mobile-first: responsive sidebar drawer, tab bar on mobile
 
 ## Backend Architecture
 
 ### API Layer
 
-All routers in `backend/src/api/`. Services accessed via `request.app.state` (set during lifespan startup).
+All routers in `src/api/<feature>/router.py`. Auth applied at router level in `main.py`:
 
-| Method | Path | Router | Description |
-|--------|------|--------|-------------|
-| `GET` | `/api/health` | `health/router.py` | CLI availability, projects dir status |
-| `GET` | `/api/projects` | `projects/router.py` | List projects (paginated) |
-| `POST` | `/api/projects` | `projects/router.py` | Create project (copies template, git init) |
-| `GET` | `/api/projects/{id}` | `projects/router.py` | Get project details + fs metadata |
-| `PATCH` | `/api/projects/{id}` | `projects/router.py` | Update name/description |
-| `POST` | `/api/projects/{id}/git-init` | `projects/router.py` | Initialize git in project folder |
-| `DELETE` | `/api/projects/{id}` | `projects/router.py` | Delete project (optional file + repo deletion) |
-| `GET` | `/api/sessions?project_id=` | `sessions/router.py` | List sessions for a project |
-| `POST` | `/api/sessions` | `sessions/router.py` | Create a new chat session |
-| `GET` | `/api/sessions/{id}` | `sessions/router.py` | Get session details |
-| `PATCH` | `/api/sessions/{id}` | `sessions/router.py` | Rename session |
-| `DELETE` | `/api/sessions/{id}` | `sessions/router.py` | Soft-delete session |
-| `WS` | `/ws/chat` | `chat/router.py` | Bidirectional chat streaming |
-| `GET` | `/api/keys` | `api_keys/router.py` | List all API keys (masked values) |
-| `POST` | `/api/keys` | `api_keys/router.py` | Store new API key (encrypted) |
-| `GET` | `/api/keys/{id}` | `api_keys/router.py` | Get single key (masked) |
-| `PATCH` | `/api/keys/{id}` | `api_keys/router.py` | Update key name/value/service |
-| `DELETE` | `/api/keys/{id}` | `api_keys/router.py` | Delete API key |
-| `GET` | `/api/commands` | `commands/router.py` | List all commands (built-in + custom) |
-| `GET` | `/api/commands/{name}` | `commands/router.py` | Get single command |
-| `POST` | `/api/commands` | `commands/router.py` | Create custom command (.md file) |
-| `PUT` | `/api/commands/{name}` | `commands/router.py` | Update custom command |
-| `DELETE` | `/api/commands/{name}` | `commands/router.py` | Delete custom command |
-| `POST` | `/api/commands/generate` | `commands/router.py` | AI-generate command content via Claude CLI |
-| `GET` | `/api/mcps` | `mcps/router.py` | List installed MCP servers |
-| `POST` | `/api/mcps/install` | `mcps/router.py` | Install MCP via natural language |
-| `GET` | `/api/projects/{id}/files` | `files/router.py` | Recursive file tree for a project |
-| `GET` | `/api/projects/{id}/files/search` | `files/router.py` | Fuzzy file search (`?q=...`) |
-| `GET` | `/api/projects/{id}/files/content` | `files/router.py` | Read file content (`?path=...`, max 50KB) |
-| `GET` | `/api/projects/{id}/files/listing` | `files/router.py` | List folder contents (`?path=...`) |
-| `GET` | `/api/claude-md` | `claude_md/router.py` | Get CLAUDE.md content |
-| `PUT` | `/api/claude-md` | `claude_md/router.py` | Update CLAUDE.md (syncs to all projects) |
-| `POST` | `/api/mentions/fetch-url` | `mentions/router.py` | Fetch URL content (SSRF-protected, max 50KB) |
-| `GET` | `/api/github/auth/login` | `github/router.py` | Redirect to GitHub OAuth |
-| `GET` | `/api/github/auth/callback` | `github/router.py` | OAuth callback, stores encrypted token |
-| `GET` | `/api/github/status` | `github/router.py` | Check if GitHub account is connected |
-| `DELETE` | `/api/github/disconnect` | `github/router.py` | Remove GitHub account |
-| `POST` | `/api/github/repos` | `github/router.py` | Create GitHub repo |
-| `GET` | `/api/github/repos` | `github/router.py` | List user's repos |
-| `POST` | `/api/github/projects/{id}/link` | `github/router.py` | Link GitHub repo to project (set remote) |
-| `POST` | `/api/github/projects/{id}/push` | `github/router.py` | Push project to linked GitHub repo |
-
-All REST endpoints return `APIResponse[T]` (`backend/src/schemas/common.py`):
 ```python
-{"success": true, "data": {...}, "error": null}
+# Public
+app.include_router(health_router)
+app.include_router(auth_router)
+
+# Protected (JWT dependency)
+app.include_router(projects_router, dependencies=[Depends(get_current_user)])
+app.include_router(sessions_router, dependencies=[Depends(get_current_user)])
+# ... all other routers
+
+# WebSocket (handles its own auth)
+app.include_router(chat_router)
 ```
+
+### Full Endpoint Table
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET` | `/api/health` | No | CLI availability, projects dir status |
+| `POST` | `/api/auth/login` | No | Password → JWT token |
+| `GET/POST` | `/api/projects` | JWT | List / create projects |
+| `GET/PATCH/DELETE` | `/api/projects/{id}` | JWT | Get / update / delete project |
+| `POST` | `/api/projects/{id}/git-init` | JWT | Initialize git |
+| `GET` | `/api/projects/{id}/files` | JWT | Recursive file tree |
+| `GET` | `/api/projects/{id}/files/search` | JWT | Fuzzy file search |
+| `GET` | `/api/projects/{id}/files/content` | JWT | Read file (max 50KB) |
+| `GET` | `/api/projects/{id}/files/listing` | JWT | List folder contents |
+| `GET/POST` | `/api/sessions` | JWT | List / create sessions |
+| `GET/PATCH/DELETE` | `/api/sessions/{id}` | JWT | Get / rename / delete session |
+| `WS` | `/ws/chat` | Token | Bidirectional chat streaming |
+| `GET/POST` | `/api/keys` | JWT | List / create API keys |
+| `GET/PATCH/DELETE` | `/api/keys/{id}` | JWT | Get / update / delete key |
+| `GET` | `/api/keys/{id}/value` | JWT | Decrypt key value |
+| `GET/POST` | `/api/commands` | JWT | List / create commands |
+| `GET/PUT/DELETE` | `/api/commands/{name}` | JWT | Get / update / delete command |
+| `POST` | `/api/commands/generate` | JWT | AI-generate command |
+| `GET` | `/api/mcps` | JWT | List MCP servers |
+| `POST` | `/api/mcps/install` | JWT | Install MCP via NL |
+| `GET/PUT` | `/api/claude-md` | JWT | Read / update CLAUDE.md |
+| `POST` | `/api/mentions/fetch-url` | JWT | Fetch URL (SSRF-protected) |
+| `GET` | `/api/github/auth/login` | No | Redirect to GitHub OAuth |
+| `GET` | `/api/github/auth/callback` | No | OAuth callback |
+| `GET` | `/api/github/status` | JWT | GitHub connection status |
+| `DELETE` | `/api/github/disconnect` | JWT | Revoke GitHub token |
+| `GET/POST` | `/api/github/repos` | JWT | List / create repos |
+| `POST` | `/api/github/projects/{id}/link` | JWT | Link repo to project |
+| `POST` | `/api/github/projects/{id}/push` | JWT | Push to GitHub |
+
+All REST endpoints return `APIResponse[T]`: `{"success": true, "data": {...}, "error": null}`
 
 ### Service Layer
 
 | Service | File | Responsibility |
 |---------|------|----------------|
-| `ProjectService` | `services/projects/project_service.py` | CRUD, template `.claude/` copying, git init/push, GitHub remote, filesystem-DB sync |
-| `SessionService` | `services/sessions/session_service.py` | CRUD, metadata updates after messages, soft deletes |
 | `ProcessManager` | `services/claude/process_manager.py` | Spawn/track/kill `claude` subprocesses, stream parsing, API key env injection |
-| `ApiKeyService` | `services/api_keys/api_key_service.py` | Encrypted key storage, CRUD, `get_decrypted_env_map()` for process injection |
-| `CommandService` | `services/commands/command_service.py` | Custom command CRUD (filesystem-backed `.md` files), merges with built-in commands, AI generation via Claude CLI |
-| `McpService` | `services/mcps/mcp_service.py` | Scans MCP plugin dir for `.mcp.json` configs, natural language install via `claude mcp add` |
-| `generate_title()` | `services/chat/title_generator.py` | Auto-generates 2-4 word session titles via Anthropic API (Claude Haiku) |
-
-| `GitHubService` | `services/github/github_service.py` | OAuth flow, repo CRUD/delete, encrypted token storage (single-user model) |
-| `ClaudeMdService` | `services/claude_md/claude_md_service.py` | Read/write CLAUDE.md from templates dir, sync to all projects |
-
-Services are instantiated once in `main.py` lifespan and stored on `app.state`. The 8 services registered: `ProjectService`, `SessionService`, `ProcessManager`, `ApiKeyService`, `CommandService`, `McpService`, `GitHubService`, `ClaudeMdService`.
+| `StreamParser` | `services/claude/stream_parser.py` | Parse NDJSON from CLI into typed events |
+| `CommandTranslator` | `services/claude/command_translator.py` | Map `/slash` commands to NL prompts |
+| `ProjectService` | `services/projects/project_service.py` | CRUD, template copying, git init, filesystem-DB sync |
+| `SessionService` | `services/sessions/session_service.py` | CRUD, metadata updates after messages |
+| `ApiKeyService` | `services/api_keys/api_key_service.py` | Encrypted key storage, env injection |
+| `CommandService` | `services/commands/command_service.py` | Custom command CRUD (filesystem .md files) |
+| `McpService` | `services/mcps/mcp_service.py` | MCP plugin discovery + NL install |
+| `GitHubService` | `services/github/github_service.py` | OAuth, token management, repo CRUD |
+| `ClaudeMdService` | `services/claude_md/claude_md_service.py` | CLAUDE.md read/write/sync |
+| `generate_title()` | `services/chat/title_generator.py` | AI-generated session titles |
 
 ### Data Layer
 
-**SQLite** at `backend/data/telecode.db` (created at runtime). Four tables:
+SQLite at `backend/data/telecode.db`. Four tables:
 
 ```sql
-projects         (id TEXT PK, name, slug, path, description, github_repo_url, created_at, updated_at)
-sessions         (id TEXT PK, project_id FK, name, last_message, message_count, is_active, created_at, updated_at)
-api_keys         (id TEXT PK, name, service, env_var, encrypted_value, created_at, updated_at)
-github_accounts  (id TEXT PK, github_username, github_user_id UNIQUE, avatar_url, encrypted_token, scopes, created_at, updated_at)
+projects        (id TEXT PK, name, slug, path, description, github_repo_url, created_at, updated_at)
+sessions        (id TEXT PK, project_id FK, name, last_message, message_count, is_active, created_at, updated_at)
+api_keys        (id TEXT PK, name, service, env_var, encrypted_value, created_at, updated_at)
+github_accounts (id TEXT PK, github_username, github_user_id UNIQUE, avatar_url, encrypted_token, scopes, ...)
 ```
 
-- WAL mode for concurrent reads
-- Foreign keys enabled
-- Indexes on `sessions.project_id` and `sessions.updated_at`
-- `aiosqlite` for async access (non-blocking in the event loop)
-- Session IDs are UUIDs reused as `claude --session-id` values
+WAL mode, foreign keys enabled, async via aiosqlite. Session IDs are UUIDs reused as `claude --session-id` values.
 
-### Encryption (`core/encryption.py`)
-
-API key values are encrypted at rest using Fernet symmetric encryption:
-
-1. Master key loaded from `TELECODE_ENCRYPTION_KEY` env var, or from `backend/data/.master.key` file (auto-generated on first run, chmod 600)
-2. `encrypt(plaintext) → ciphertext` / `decrypt(ciphertext) → plaintext`
-3. Keys are decrypted only when injecting into Claude CLI subprocess environment via `ApiKeyService.get_decrypted_env_map()`
-4. GitHub access tokens are also encrypted using the same Fernet system and stored in `github_accounts.encrypted_token`
-
-### Authentication & Authorization
-
-Currently **disabled** (`auth_enabled = False` in config). Stubs exist in `core/security.py`. JWT auth will be added before deploying to a remote server.
-
-### Configuration
-
-All settings in `core/config.py` via `pydantic-settings`. Environment variables use the `TELECODE_` prefix:
-
-| Setting | Default | Env Var |
-|---------|---------|---------|
-| `projects_dir` | `~/Claude Code Projects` | `TELECODE_PROJECTS_DIR` |
-| `claude_binary` | `claude` | `TELECODE_CLAUDE_BINARY` |
-| `default_model` | `sonnet` | `TELECODE_DEFAULT_MODEL` |
-| `max_budget_usd` | `5.0` | `TELECODE_MAX_BUDGET_USD` |
-| `fallback_model` | `haiku` | `TELECODE_FALLBACK_MODEL` |
-| `process_timeout_seconds` | `600` | `TELECODE_PROCESS_TIMEOUT_SECONDS` |
-| `mcp_plugins_dir` | `~/.claude/plugins/marketplaces/claude-plugins-official/external_plugins` | `TELECODE_MCP_PLUGINS_DIR` |
-| `cors_origins` | `["http://localhost:3000", "http://localhost:3001"]` | `TELECODE_CORS_ORIGINS` |
-
-## Claude CLI Integration
+### Claude CLI Integration
 
 Three modules in `services/claude/`:
 
-### ProcessManager (`process_manager.py`)
+**ProcessManager** spawns Claude as a subprocess:
+```
+claude -p --output-format stream-json --session-id <uuid> --model <model> --max-budget-usd 5.0 [--resume]
+```
+- Working directory: project folder
+- Environment: OS env + decrypted API keys
+- Stdin: message text
+- Stdout: NDJSON parsed line-by-line → `ParsedEvent` → WebSocket events
+- Supports cancel (SIGTERM → SIGKILL after 5s) and timeout (600s)
 
-- Maintains `dict[session_id, RunningProcess]` — one active process per session
-- `run_prompt()` is an **async generator** that:
-  1. Translates slash commands via `command_translator.translate()`
-  2. Builds CLI args: `-p`, `--output-format stream-json`, `--verbose`, `--session-id`, `--model`, `--allowedTools`, `--max-budget-usd`
-  3. Injects decrypted API keys as environment variables (via `ApiKeyService.get_decrypted_env_map()`)
-  4. Spawns via `asyncio.create_subprocess_exec(cwd=project_path)`
-  5. Reads stdout line-by-line → parses with `stream_parser.parse_line()` → yields `ParsedEvent`
-  6. Updates session metadata on completion
-- `cancel()` sets a flag + terminates the subprocess (graceful → force kill after 5s)
-- `cleanup_all()` kills all processes on shutdown
-- Unsets `CLAUDECODE` env var to prevent nested-session detection
+**StreamParser** handles CLI output types: `assistant` (text, thinking, tool_use, tool_result), `result` (completion with usage/cost), `error`.
 
-### StreamParser (`stream_parser.py`)
-
-Parses NDJSON lines from `claude --output-format stream-json` into `ParsedEvent(type, session_id, data)`.
-
-Handles these CLI output types:
-- `assistant` messages → extracts `text`, `thinking`, `tool_use`, `tool_result` content blocks
-- `result` messages → maps to `message_complete` with usage/cost data
-- `error` messages → maps to `error` events
-
-### CommandTranslator (`command_translator.py`)
-
-Maps frontend slash commands to natural language prompts since `/commands` don't work in `-p` mode:
-
-| Command | Translated Prompt |
-|---------|-------------------|
-| `/commit` | "Look at staged changes and create an appropriate commit..." |
-| `/review` | "Review current uncommitted changes..." |
-| `/test` | "Run the test suite..." |
-| `/fix` | "Fix lint errors, type errors, and test failures..." |
-| `/build` | "Run the build command and fix errors..." |
-| `/lint` | "Run the linter and fix all issues..." |
-
-Frontend also defines additional commands: `/refactor`, `/docs`, `/git-status` (in `frontend/lib/constants.ts`).
-
-Supports trailing args: `/commit fix the typo` → base prompt + "Additional context: fix the typo"
+**CommandTranslator** converts `/slash` commands to natural language prompts (since `/commands` don't work in `-p` mode).
 
 ## WebSocket Protocol
 
-**Connection:** `ws://host:8000/ws/chat`
+Single WebSocket per client at `/ws/chat`. All sessions multiplexed by `session_id`.
 
-Single WebSocket per client, all sessions multiplexed by `session_id`.
+### Client → Server
 
-### Client → Server (`InboundMessage`)
-
-```typescript
-// Send a message
-{type: "send_message", message: "...", session_id: "<uuid>", project_id: "<uuid>", model?: "claude-opus-4-6"}
-
-// Cancel running process
-{type: "cancel", session_id: "<uuid>"}
-
-// Keep-alive
-{type: "ping"}
+```json
+{"type": "send_message", "session_id": "...", "project_id": "...", "message": "...", "model": "claude-opus-4-6"}
+{"type": "cancel", "session_id": "..."}
+{"type": "ping"}
 ```
 
-### Server → Client (`OutboundEvent`)
+### Server → Client (streaming)
 
-```typescript
-{type: "session_created", session_id: "...", project_id: "..."}
-{type: "session_renamed", session_id: "...", name: "Auto-generated title"}
-{type: "message_start", session_id: "..."}
-{type: "thinking_delta", session_id: "...", thinking: "Let me check..."}
-{type: "text_delta", session_id: "...", text: "Here's "}
-{type: "tool_use_start", session_id: "...", tool_name: "Edit", tool_id: "...", input: {...}}
-{type: "tool_result", session_id: "...", tool_id: "...", output: "...", is_error: false}
-{type: "message_complete", session_id: "...", result_text: "...", usage: {...}, cost_usd: 0.05}
-{type: "error", session_id?: "...", error: "...", code?: "..."}
-{type: "cancelled", session_id: "..."}
-{type: "pong"}
+```json
+{"type": "message_start", "session_id": "..."}
+{"type": "text_delta", "session_id": "...", "text": "Hello"}
+{"type": "thinking_delta", "session_id": "...", "thinking": "Let me..."}
+{"type": "tool_use_start", "session_id": "...", "tool_name": "Read", "tool_id": "...", "input": {...}}
+{"type": "tool_result", "session_id": "...", "tool_id": "...", "output": "...", "is_error": false}
+{"type": "message_complete", "session_id": "...", "result_text": "...", "usage": {...}, "cost_usd": 0.05}
+{"type": "session_created", "session_id": "...", "project_id": "..."}
+{"type": "session_renamed", "session_id": "...", "name": "AI Title"}
+{"type": "input_required", "session_id": "..."}
+{"type": "error", "session_id": "...", "error": "..."}
+{"type": "cancelled", "session_id": "..."}
+{"type": "pong"}
 ```
-
-## API Key Management
-
-Allows users to store third-party API keys (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) that get injected into Claude CLI subprocess environments:
-
-1. User creates key via Settings page → `POST /api/keys` with name, service, env_var, value
-2. Backend encrypts value with Fernet → stores `encrypted_value` in SQLite
-3. When ProcessManager spawns `claude -p`, calls `ApiKeyService.get_decrypted_env_map()` → returns `{env_var: plaintext_value}`
-4. Keys injected as environment variables into the subprocess
-5. In frontend, values are always displayed masked (last 4 chars only)
-
-## Project Template System
-
-New projects are created with a standard template:
-
-1. `ProjectService.create_project("My App")` is called
-2. Slugifies name → `my-app`
-3. Creates `~/Claude Code Projects/my-app/`
-4. `shutil.copytree` copies `~/Claude Code Projects/.templates/.claude/` → `my-app/.claude/`
-5. Runs `git init` in the new folder
-6. Inserts project record into SQLite
-
-The template contains:
-- `.claude/CLAUDE.md` — project conventions (monorepo structure, frontend/backend patterns)
-- `.claude/settings.json` — pre-approved permissions (Read, Write, Edit, Glob, Grep, Bash(*), etc.)
 
 ## Key Flows
 
-### New Chat Message
+### Chat Message Flow
 
-1. User types message in `chat-input.tsx`, triggers `store.sendMessage()`
-2. Zustand store calls `wsManager.send({type: "send_message", ...})`
-3. If WS not connected → inline error message added to local state, no request sent
-4. If sent → user message added to `messages[sessionId]`, `isStreaming[sessionId] = true`
-5. Backend `chat/router.py` validates payload, checks session exists (creates if new)
-6. Resolves project path from `project_id`
-7. Spawns `asyncio.Task` → calls `ProcessManager.run_prompt()`
-8. ProcessManager injects API keys as env vars, spawns `claude -p "..." --session-id <uuid> cwd=<project_path>`
-9. CLI stdout streams NDJSON lines
-10. Each line parsed by `StreamParser` → `ParsedEvent`
-11. Events forwarded to WebSocket as JSON
-12. Frontend `store.handleWsEvent()` routes each event type → appends text deltas, tracks tool use, marks completion
-13. On completion, session metadata updated in DB
+```
+User types message → store.sendMessage()
+    → wsManager.send({type: "send_message", ...})
+    → Backend: chat_websocket() receives message
+    → Background task: ProcessManager.run_prompt()
+    → Spawn: claude -p --output-format stream-json --session-id <uuid>
+    → Read stdout line-by-line (NDJSON)
+    → Parse → websocket.send_json(event) for each event
+    → Frontend: handleWsEvent() → update store
+    → React re-renders with streaming text, tool cards, thinking blocks
+    → message_complete → isStreaming = false
+```
 
-### Project Creation
+### @Mention Resolution
 
-1. User clicks "New Project" → `create-project-dialog.tsx` opens
-2. `POST /api/projects` with `{"name": "My App"}`
-3. Slugify → create folder → copy `.claude/` template → `git init`
-4. Insert DB record → return project info
-5. Frontend prepends project to store, navigates to project
+```
+User types @filename → suggestion dropdown → selects file
+    → On send: useMentionResolver resolves each mention
+    → @file → api.readFileContent() | @folder → api.readFolderListing() | @url → api.fetchUrlContent()
+    → Wrapped in <attached_context> XML → prepended to message
+    → Sent to Claude with full context
+```
 
-### Filesystem Sync
+### API Key Injection
 
-On `GET /api/projects`, `ProjectService._sync_filesystem_to_db()` scans `~/Claude Code Projects/` for folders not yet in the DB and auto-registers them. Projects created outside the app (e.g., manually in Finder) are automatically discovered.
-
-## Custom Slash Commands
-
-Users can create, edit, and delete custom slash commands via the Settings page. Commands are stored as `.md` files in the template directory (`~/Claude Code Projects/.templates/.claude/commands/`).
-
-### Architecture
-
-- **Backend:** `CommandService` reads/writes `.md` files from the template commands directory. Merges custom commands with built-in commands (from `command_translator.py`) into a unified list.
-- **Frontend:** Settings page section with `command-list.tsx` table + `command-create-dialog.tsx` modal. `use-commands.ts` hook for CRUD operations.
-- **Slash command palette:** `use-slash-commands.ts` fetches the merged command list from the API at mount, replacing the hardcoded fallback in `constants.ts`.
-
-### AI Generation
-
-`POST /api/commands/generate` spawns `claude -p` with a meta-prompt to generate command markdown from a natural language description. Budget-capped at $1.00 per generation, 90s timeout.
-
-### Command Names
-
-- Pattern: `^[a-z][a-z0-9-]*$` (lowercase, hyphens allowed)
-- Built-in commands cannot be overridden or deleted
-- Custom commands stored at: `<templates_dir>/.claude/commands/<name>.md`
-
-## MCP Server Management
-
-Users can view installed MCP servers and install new ones via natural language through the Settings page.
-
-### Listing
-
-`McpService._scan()` reads `.mcp.json` files from the MCP plugins directory (configurable via `TELECODE_MCP_PLUGINS_DIR`). Supports both `mcpServers`-wrapped and flat configs. Extracts name, command/args (stdio) or url (SSE).
-
-### Natural Language Install
-
-`POST /api/mcps/install` is a two-step process:
-
-1. **Interpret:** Spawns `claude -p` with a meta-prompt containing known MCP packages. Claude returns structured JSON (`{name, command, args}` or `{name, url}`).
-2. **Execute:** Runs `claude mcp add -s user <name> -- <command> <args...>` (or `--transport sse` for URL-based MCPs).
-
-Budget: $0.50 per interpretation, 60s timeout per step.
-
-## File Tree
-
-The chat interface includes a collapsible right-side panel showing the project's file tree.
-
-- **Backend:** `GET /api/projects/{id}/files` recursively scans the project directory, returning a nested `FileNode[]` structure. Respects `.gitignore` and built-in ignore patterns (`.git`, `node_modules`, `__pycache__`, `.next`, `venv`, etc.). Max depth configurable (default 10).
-- **Frontend:** `file-tree-panel.tsx` with animated open/close. `use-file-tree.ts` hook polls every 5 seconds to stay in sync with filesystem changes from Claude Code.
-
-## Session Title Auto-Generation
-
-When a new chat message is sent, the backend can auto-generate a 2-4 word session title using the Anthropic API directly (not via CLI):
-
-- Uses `claude-haiku-4-5-20251001` for speed and low cost
-- Looks for `ANTHROPIC_API_KEY` in stored keys (via `ApiKeyService`) or environment
-- Sends a `session_renamed` WebSocket event to the frontend on success
-- Fails silently if no API key is available
+```
+User stores API key → encrypted with Fernet → stored in DB
+    → User sends message → ProcessManager.run_prompt()
+    → ApiKeyService.get_decrypted_env_map() → {ENV_VAR: plaintext}
+    → Injected as subprocess environment variables
+    → Claude CLI reads from environment
+```
 
 ## Infrastructure & Deployment
 
-### Local Development (current)
-```bash
-# Backend
-cd backend && source venv/bin/activate && uvicorn src.main:app --reload --port 8000
+### Cloudflare Tunnel
 
-# Frontend
-cd frontend && npm run dev   # runs on :3000
+All traffic routed through `cloudflared`:
+
+```yaml
+# ~/.cloudflared/config.yml
+ingress:
+  - hostname: casperbot.net
+    path: /ws/*
+    service: http://localhost:8000     # WebSocket → backend
+  - hostname: casperbot.net
+    path: /api/*
+    service: http://localhost:8000     # API → backend
+  - hostname: casperbot.net
+    service: http://localhost:3000     # Everything else → frontend
+  - service: http_status:404
 ```
 
-### Future Server Deployment
-- Deploy backend to Mac Mini / server
-- Add JWT auth (stubs already in `core/security.py`)
-- Configure `TELECODE_CORS_ORIGINS` for the frontend domain
-- Set `TELECODE_SECRET_KEY` for token signing
-- Set `TELECODE_ENCRYPTION_KEY` for API key encryption (instead of auto-generated file)
-- Ensure Claude Code CLI is installed and logged in with Max subscription
+### Scripts
 
-## GitHub Integration
+| Script | Purpose |
+|--------|---------|
+| `setup.sh` | Interactive first-time setup: installs deps, prompts for domain/password, generates JWT secret |
+| `start.sh` | Loads env, kills stale processes, starts backend/frontend/tunnel with health checks |
+| `stop.sh` | Kills all services by PID + port fallback |
+| `status.sh` | Shows which services are running and responding |
+| `service/install.sh` | Registers launchd service for auto-start on boot |
+| `service/uninstall.sh` | Removes launchd service |
 
-Full GitHub OAuth flow for connecting a user's GitHub account, creating repos, and pushing code.
+### Environment Variables
 
-### Architecture
+**Backend (`TELECODE_` prefix):**
 
-- **Backend:** `GitHubService` handles OAuth (authorize → callback → token exchange), encrypts the access token with Fernet, stores in `github_accounts` table. Single-user model — only one account at a time (DELETE old before INSERT new). OAuth scope: `repo delete_repo`.
-- **Frontend:** Settings → GitHub section shows connection status with avatar/username. `use-github.ts` hook manages state. Chat header shows contextual buttons:
-  - **"Init Git"** — when project has no git repo (`has_git: false`)
-  - **"Push to GitHub"** — when project has git but no linked repo (creates repo, links it, pushes in one flow)
-  - **"Push"** — when project already has a linked GitHub repo
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `TELECODE_AUTH_PASSWORD` | Login password | (required) |
+| `TELECODE_AUTH_SECRET` | JWT signing key (HS256) | (required) |
+| `TELECODE_AUTH_TOKEN_EXPIRY_HOURS` | Token lifetime | 720 (30 days) |
+| `TELECODE_CORS_ORIGINS` | Allowed origins (comma-separated) | `http://localhost:3000,http://localhost:3001` |
+| `TELECODE_PROJECTS_DIR` | Projects root directory | `~/Claude Code Projects` |
+| `TELECODE_DEFAULT_MODEL` | Default Claude model | `sonnet` |
+| `TELECODE_MAX_BUDGET_USD` | Budget per request | 5.0 |
+| `TELECODE_PROCESS_TIMEOUT_SECONDS` | CLI timeout | 600 |
+| `TELECODE_GITHUB_CLIENT_ID` | GitHub OAuth app ID | (optional) |
+| `TELECODE_GITHUB_CLIENT_SECRET` | GitHub OAuth app secret | (optional) |
 
-### Project Card Integration
+**Frontend (build-time, baked into JS bundle):**
 
-- Project cards show a GitHub badge when `github_repo_url` is set
-- Dropdown menu includes "Push to GitHub" for linked projects
-- Delete confirmation shows "Also delete the GitHub repository" checkbox when applicable
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `NEXT_PUBLIC_WS_URL` | WebSocket URL | `ws://localhost:8000/ws/chat` |
+| `NEXT_PUBLIC_API_URL` | API base URL | `""` (relative paths, proxied by Next.js) |
 
-### Push Mechanism
+### launchd Service
 
-Push uses token-injected URLs for security — the token is injected into the remote URL only for the push command (`https://x-access-token:<token>@github.com/...`) and is never persisted in `.git/config`.
+Auto-starts Telecode on macOS boot:
 
-### Key Files
+```bash
+./service/install.sh      # Install and start
+./service/uninstall.sh    # Remove
 
-| File | Purpose |
-|------|---------|
-| `backend/src/services/github/github_service.py` | OAuth, token management, repo CRUD |
-| `backend/src/api/github/router.py` | REST endpoints |
-| `backend/src/schemas/github.py` | Pydantic models |
-| `frontend/hooks/use-github.ts` | Connection state hook |
-| `frontend/components/settings/settings-github-section.tsx` | Settings UI |
-| `frontend/components/chat/chat-header.tsx` | Push/Init Git buttons |
+# Manual control
+launchctl kickstart -k gui/$(id -u)/com.telecode  # Restart
+launchctl print gui/$(id -u)/com.telecode          # Status
+```
 
-## @Mentions System
+## Security
 
-The chat editor (Tiptap-based) supports `@file`, `@folder`, and `@url` mentions for attaching context to messages.
-
-### Flow
-
-1. User types `@` in the editor → `MentionSuggestionList` appears
-2. `use-mention-search.ts` calls `api.searchFiles(projectId, query)` for fuzzy file matching
-3. User selects a file/folder/URL mention → stored as a Tiptap node
-4. On send: `use-mention-resolver.ts` resolves all mentions in parallel:
-   - Files: `api.readFileContent(projectId, path)` (max 50KB, no binaries)
-   - Folders: `api.readFolderListing(projectId, path)` (tree-formatted)
-   - URLs: `api.fetchUrlContent(url)` (SSRF-protected, max 50KB)
-5. Resolved content wrapped in `<attached_context>` XML tags
-6. Prepended to the message text, sent to Claude via WebSocket
-7. Chat UI shows only the raw mention labels (not the full context)
-
-### Key Files
-
-| File | Purpose |
-|------|---------|
-| `frontend/hooks/use-mention-resolver.ts` | Parallel resolution of @mentions |
-| `frontend/hooks/use-mention-search.ts` | File search for suggestions |
-| `frontend/components/chat/mention-suggestion-list.tsx` | Autocomplete UI |
-| `frontend/types/mentions.ts` | MentionItem, MentionSuggestion, ResolvedMention |
-| `backend/src/api/files/router.py` | File search, content read, folder listing |
-| `backend/src/api/mentions/router.py` | URL fetch with SSRF protection |
-
-## CLAUDE.md Management
-
-Settings → CLAUDE.md section provides a rich editor for the project conventions file.
-
-- **Backend:** `ClaudeMdService` reads/writes `~/Claude Code Projects/.templates/.claude/CLAUDE.md`, then syncs the content to every project's `.claude/CLAUDE.md` directory.
-- **Frontend:** `use-claude-md.ts` hook + `settings-claude-md-section.tsx` component with live editing and save.
-- `lastSyncCount` tracks how many projects were synced on save.
+| Concern | Mitigation |
+|---------|-----------|
+| Authentication | Password-based JWT with 30-day configurable expiry |
+| REST protection | Bearer token validated on all non-public endpoints |
+| WebSocket protection | Token in query param, validated before accept(); 1008 close on failure |
+| API key storage | Fernet encryption at rest; master key in `data/.master.key` (chmod 600) |
+| SSRF | URL fetch blocks private IPs and localhost |
+| Path traversal | File endpoints resolve paths and validate containment within project dir |
+| Input validation | Pydantic models on all request bodies |
+| CORS | Configurable allowed origins |
+| GitHub tokens | Encrypted with Fernet, injected only during push (never persisted in .git) |
 
 ## Feature Modules
 
-| Feature | Doc |
-|---------|-----|
-| GitHub Integration | See [above](#github-integration) |
-| @Mentions | See [above](#mentions-system) |
-| CLAUDE.md | See [above](#claudemd-management) |
+| Feature | Section |
+|---------|---------|
+| Authentication | [Authentication & Authorization](#authentication--authorization) |
+| Chat / Claude CLI | [Claude CLI Integration](#claude-cli-integration) |
+| WebSocket Protocol | [WebSocket Protocol](#websocket-protocol) |
+| @Mentions | [Key Flows > @Mention Resolution](#mention-resolution) |
+| GitHub Integration | Covered in API endpoints + GitHubService |
+| Deployment | [Infrastructure & Deployment](#infrastructure--deployment) |

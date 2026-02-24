@@ -4,7 +4,7 @@
 
 Telecode wraps the [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) in a web interface so you can manage projects, chat with Claude, and watch it read, write, and edit your files — all from a browser tab instead of a terminal.
 
-Your files stay on your machine. The backend spawns `claude` as a local subprocess and streams its output to the frontend over WebSocket. Nothing leaves your network.
+Your files stay on your machine. The backend spawns `claude` as a local subprocess and streams its output to the frontend over WebSocket. Deployed on a personal Mac via Cloudflare Tunnel with JWT auth, accessible from any device.
 
 ---
 
@@ -42,6 +42,9 @@ Your Local Files
 - **GitHub integration** — connect your GitHub account via OAuth, create repos, link existing repos, and push code directly from the UI
 - **@mentions** — reference files (`@filename`), folders (`@folder/`), and URLs (`@https://...`) in chat messages to give Claude extra context
 - **Mobile-responsive** — full mobile layout with sidebar drawer, tab bar navigation, and touch-friendly controls
+- **Password-protected** — JWT auth with 30-day token expiry
+- **One-command deploy** — `./start.sh` starts backend, frontend, and Cloudflare Tunnel
+- **Auto-start on boot** — macOS launchd service, no terminal needed
 
 ---
 
@@ -49,52 +52,70 @@ Your Local Files
 
 ### Prerequisites
 
-- **Node.js** 18+ and **npm**
-- **Python** 3.11+
-- **Claude Code CLI** installed and authenticated (`npm install -g @anthropic-ai/claude-code`)
+- macOS with Homebrew
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+- A domain on Cloudflare (for public access)
 
-### 1. Clone the repo
+### 1. Clone and setup
 
 ```bash
-git clone https://github.com/your-username/telecode.git
+git clone https://github.com/gubiganguly/telecode.git
 cd telecode
+./setup.sh
 ```
 
-### 2. Start the backend
+The setup script installs all dependencies, creates the virtual environment, and prompts you for your domain and login password.
+
+### 2. Start everything
 
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate      # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn src.main:app --port 8000
+./start.sh
 ```
 
-### 3. Start the frontend
+Starts backend (port 8000), frontend (port 3000), and Cloudflare Tunnel. Health-checks each service before proceeding.
+
+### 3. Access
+
+- **Local:** [http://localhost:3000](http://localhost:3000)
+- **Public:** `https://yourdomain.com` (via Cloudflare Tunnel)
+
+### 4. Auto-start on boot (optional)
 
 ```bash
-cd frontend
-npm install
-npm run dev
+./service/install.sh
 ```
 
-### 4. Open the app
+Registers a macOS launchd service. Telecode starts automatically when your Mac boots.
 
-Go to [http://localhost:3000](http://localhost:3000). Create a project, start a session, and chat.
+### 5. Management
 
-### 5. (Optional) Enable GitHub integration
+```bash
+./status.sh                  # Check what's running
+./stop.sh                    # Stop everything
+./service/uninstall.sh       # Remove auto-start
+```
 
-To push projects to GitHub, you need a GitHub OAuth App:
+### Local development (no tunnel)
+
+```bash
+# Backend
+cd backend && source venv/bin/activate
+uvicorn src.main:app --reload --port 8000
+
+# Frontend (separate terminal)
+cd frontend && npm run dev
+```
+
+### (Optional) GitHub integration
 
 1. Go to [GitHub Developer Settings](https://github.com/settings/developers) → **New OAuth App**
-2. Set Homepage URL to `http://localhost:3000`
-3. Set Callback URL to `http://localhost:8000/api/github/auth/callback`
-4. Create a `.env` file in `backend/` with:
+2. Set Callback URL to `https://yourdomain.com/api/github/auth/callback`
+3. Add to `.env.production`:
    ```
    TELECODE_GITHUB_CLIENT_ID=your_client_id
    TELECODE_GITHUB_CLIENT_SECRET=your_client_secret
    ```
-5. Restart the backend, then connect in **Settings → GitHub**
+4. Restart, then connect in **Settings → GitHub**
 
 ---
 
@@ -103,34 +124,32 @@ To push projects to GitHub, you need a GitHub OAuth App:
 ```
 telecode/
 ├── frontend/                      # Next.js 16 + React 19 + TypeScript
-│   ├── app/
-│   │   ├── projects/              # Project list page
-│   │   ├── chat/[projectId]/      # Chat interface
-│   │   └── settings/              # Settings (commands, API keys, MCPs)
-│   ├── components/
-│   │   ├── ui/                    # Base primitives (Button, Input, Dialog, etc.)
-│   │   ├── layout/                # AppProviders, ConnectionStatus
-│   │   ├── chat/                  # ChatArea, MessageList, ChatInput, ToolUseCard, etc.
-│   │   ├── projects/              # ProjectCard, CreateProjectDialog, EmptyState
-│   │   ├── sessions/              # SessionSidebar, SessionItem
-│   │   ├── settings/              # API key, command, and MCP management
-│   │   └── files/                 # FileTreePanel, FileTreeNode
-│   ├── hooks/                     # Custom hooks (useChat, useProjects, useSessions, etc.)
-│   ├── lib/                       # Store, WebSocket manager, API client, constants
-│   └── types/                     # TypeScript interfaces (api.ts, chat.ts)
+│   ├── app/                       # App Router pages (login, projects, chat, settings)
+│   ├── components/                # React components (ui, chat, projects, sessions, settings, auth)
+│   ├── hooks/                     # Custom hooks (useChat, useWebSocket, useMentions, etc.)
+│   ├── lib/                       # Store, WebSocket manager, API client, auth, constants
+│   └── types/                     # TypeScript interfaces (api.ts, chat.ts, mentions.ts)
 │
 ├── backend/                       # Python FastAPI
 │   ├── src/
-│   │   ├── main.py                # App entrypoint, lifespan, router registration
-│   │   ├── api/                   # Route handlers (health, projects, sessions, chat,
-│   │   │                          #   api_keys, commands, mcps, files, claude_md, github)
-│   │   ├── services/              # Business logic (claude/, projects/, sessions/,
-│   │   │                          #   api_keys/, commands/, mcps/, chat/, claude_md/, github/)
+│   │   ├── main.py                # App entrypoint, lifespan, auth, router registration
+│   │   ├── api/                   # Route handlers (auth, health, chat, projects, sessions, etc.)
+│   │   ├── services/              # Business logic (claude/, projects/, sessions/, api_keys/, etc.)
 │   │   ├── schemas/               # Pydantic models
-│   │   └── core/                  # Config, database, encryption, exceptions
-│   ├── data/                      # SQLite database (auto-created)
+│   │   └── core/                  # Config, database, security (JWT), encryption
+│   ├── data/                      # SQLite database + master key (gitignored)
 │   └── requirements.txt
 │
+├── service/                       # macOS launchd auto-start
+│   ├── com.telecode.plist         # Service definition
+│   ├── install.sh                 # Register with launchctl
+│   └── uninstall.sh               # Unregister
+│
+├── start.sh                       # Start all services
+├── stop.sh                        # Stop all services
+├── status.sh                      # Check what's running
+├── setup.sh                       # Interactive first-time setup
+├── .env.production                # Production env vars (gitignored)
 └── codebase-docs/                 # Auto-generated architecture docs
 ```
 
@@ -138,32 +157,21 @@ telecode/
 
 ## Configuration
 
-All backend settings use the `TELECODE_` prefix and can be set as environment variables:
+All settings are in `.env.production` (created by `setup.sh`). Backend uses the `TELECODE_` prefix:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `TELECODE_DEBUG` | `false` | Enable debug mode |
-| `TELECODE_HOST` | `0.0.0.0` | Server bind host |
-| `TELECODE_PORT` | `8000` | Server bind port |
-| `TELECODE_PROJECTS_DIR` | `~/Claude Code Projects` | Root directory for project files |
-| `TELECODE_CLAUDE_BINARY` | `claude` | Path to the Claude Code CLI binary |
-| `TELECODE_DEFAULT_MODEL` | `sonnet` | Default Claude model |
-| `TELECODE_FALLBACK_MODEL` | `haiku` | Fallback model if primary unavailable |
-| `TELECODE_MAX_BUDGET_USD` | `5.0` | Per-invocation API budget limit |
-| `TELECODE_PROCESS_TIMEOUT_SECONDS` | `600` | CLI process timeout (seconds) |
-| `TELECODE_ENCRYPTION_KEY` | auto-generated | Fernet key for API key encryption |
-| `TELECODE_CORS_ORIGINS` | `localhost:3000,3001` | Allowed CORS origins |
-| `TELECODE_GITHUB_CLIENT_ID` | _(empty)_ | GitHub OAuth App client ID |
-| `TELECODE_GITHUB_CLIENT_SECRET` | _(empty)_ | GitHub OAuth App client secret |
-| `TELECODE_GITHUB_CALLBACK_URL` | `http://localhost:8000/api/github/auth/callback` | GitHub OAuth callback URL |
-| `TELECODE_FRONTEND_URL` | `http://localhost:3000` | Frontend URL (for OAuth redirect) |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TELECODE_AUTH_PASSWORD` | Yes | Login password |
+| `TELECODE_AUTH_SECRET` | Yes | JWT signing key (auto-generated by setup) |
+| `TELECODE_CORS_ORIGINS` | Yes | Allowed origins, e.g. `https://yourdomain.com` |
+| `NEXT_PUBLIC_WS_URL` | Yes | WebSocket URL, e.g. `wss://yourdomain.com/ws/chat` |
+| `TELECODE_PROJECTS_DIR` | No | Project directory (default: `~/Claude Code Projects`) |
+| `TELECODE_DEFAULT_MODEL` | No | Default model (default: `sonnet`) |
+| `TELECODE_MAX_BUDGET_USD` | No | Budget per request (default: `5.0`) |
+| `TELECODE_GITHUB_CLIENT_ID` | No | GitHub OAuth App client ID |
+| `TELECODE_GITHUB_CLIENT_SECRET` | No | GitHub OAuth App client secret |
 
-Frontend env vars (set in `frontend/.env.local`):
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | Backend API base URL |
-| `NEXT_PUBLIC_WS_URL` | `ws://localhost:8000/ws/chat` | WebSocket URL |
+See [ARCHITECTURE.md](codebase-docs/architecture/ARCHITECTURE.md#environment-variables) for the full list.
 
 ---
 
@@ -249,37 +257,18 @@ Full API docs auto-generated at `/docs` when the backend is running (FastAPI Swa
 
 ---
 
-## Development
+## Architecture
 
-### Frontend
-
-```bash
-cd frontend
-npm run dev       # Start dev server on :3000
-npm run build     # Production build
-npm run lint      # Run ESLint
-```
-
-### Backend
-
-```bash
-cd backend
-source venv/bin/activate
-uvicorn src.main:app --reload --port 8000    # Dev server with hot reload
-```
-
-### Architecture Docs
-
-This project includes auto-generated architecture documentation in [codebase-docs/architecture/](codebase-docs/architecture/). See [ARCHITECTURE.md](codebase-docs/architecture/ARCHITECTURE.md) for a full system overview.
+See [ARCHITECTURE.md](codebase-docs/architecture/ARCHITECTURE.md) for the full system architecture, including API endpoints, WebSocket protocol, data flows, and deployment details.
 
 ---
 
 ## Current Status
 
-**v0.1.0 — Active development**
+**v0.1.0 — Deployed and working**
 
-Working today:
-
+- Password-based JWT auth with 30-day token expiry
+- Cloudflare Tunnel deployment with auto-start on boot
 - Full project and session CRUD with AI-generated session titles
 - Real-time streaming chat with thinking blocks and tool visibility
 - API key vault with encrypted storage, auto-injected into CLI
@@ -287,17 +276,9 @@ Working today:
 - MCP server listing and installation
 - File tree browser
 - CLAUDE.md editing and syncing to projects
-- GitHub integration (OAuth connect, create/link repos, push from chat header)
-- @mentions for files, folders, and URLs in chat
+- GitHub integration (OAuth connect, create/link repos, push)
+- @mentions for files, folders, and URLs
 - Responsive web UI with dark theme (desktop + mobile)
-- SQLite persistence with WAL mode
-
-What's coming:
-
-- Authentication support (config flag exists, implementation pending)
-- Deployment guides
-- Multi-user support
-- Enhanced session history and search
 
 ---
 
@@ -329,6 +310,7 @@ Telecode is a monorepo with two apps — a **Next.js frontend** (`/frontend`) an
 - **Custom hooks per domain** — `use-chat.ts`, `use-projects.ts`, `use-sessions.ts`, `use-api-keys.ts`, `use-commands.ts`, `use-mcps.ts`, `use-github.ts`, `use-mention-resolver.ts`, etc.
 - **Component organization** — `components/ui/` for primitives, `components/<feature>/` for feature-specific components
 - **Service layer** — backend `services/` for business logic, `api/` for route handlers, `schemas/` for Pydantic models
+- **JWT auth** — password login → JWT token, validated on all protected endpoints and WebSocket
 - **SQLite with raw SQL** — no ORM, schema defined in `backend/src/core/database.py`, async via aiosqlite
 - **CLI subprocess management** — `ProcessManager` spawns `claude` processes, parses `stream-json` output line by line
 - **Encrypted API key storage** — Fernet encryption in `core/encryption.py`, keys injected as env vars into CLI subprocesses

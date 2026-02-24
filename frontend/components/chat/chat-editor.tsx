@@ -42,6 +42,7 @@ export interface ChatEditorRef {
   clear: () => void;
   getText: () => string;
   isEmpty: () => boolean;
+  insertText: (text: string) => void;
 }
 
 interface ChatEditorProps {
@@ -268,6 +269,10 @@ export const ChatEditor = forwardRef<ChatEditorRef, ChatEditorProps>(
       clear: () => editor?.commands.clearContent(),
       getText: () => editor?.getText() ?? "",
       isEmpty: () => editor?.isEmpty ?? true,
+      insertText: (text: string) => {
+        editor?.commands.focus();
+        editor?.commands.insertContent(text);
+      },
     }));
 
     return <EditorContent editor={editor} />;

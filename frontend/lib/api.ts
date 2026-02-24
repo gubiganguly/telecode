@@ -37,6 +37,7 @@ import type {
   GitHubCreateRepoResponse,
   GitHubRepoListResponse,
   GitHubPushResponse,
+  MessageListResponse,
 } from "@/types/api";
 
 class ApiClient {
@@ -314,6 +315,13 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify({ repo_url: repoUrl }),
     });
+  }
+
+  // Messages
+  async listMessages(sessionId: string, offset = 0, limit = 200): Promise<MessageListResponse> {
+    return this.request<MessageListResponse>(
+      `/api/messages?session_id=${sessionId}&offset=${offset}&limit=${limit}`
+    );
   }
 
   async pushToGitHub(projectId: string, branch?: string): Promise<GitHubPushResponse> {

@@ -142,6 +142,16 @@
   pointer-events: none;
 }
 
+/* Mic recording pulse */
+@keyframes mic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.mic-pulse {
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+
 /* Mention chips inline */
 .tiptap.chat-editor-content .mention-chip {
   background: rgba(200, 121, 65, 0.15);

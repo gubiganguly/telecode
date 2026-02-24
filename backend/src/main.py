@@ -103,6 +103,7 @@ async def lifespan(app: FastAPI):
     # Make services available on app state
     from .services.sessions.session_service import SessionService
     from .services.projects.project_service import ProjectService
+    from .services.messages.message_service import MessageService
     from .services.claude.process_manager import ProcessManager
     from .services.api_keys.api_key_service import ApiKeyService
     from .services.commands.command_service import CommandService
@@ -112,6 +113,7 @@ async def lifespan(app: FastAPI):
 
     app.state.session_service = SessionService()
     app.state.project_service = ProjectService()
+    app.state.message_service = MessageService()
     app.state.api_key_service = ApiKeyService()
     app.state.command_service = CommandService()
     app.state.mcp_service = McpService()
@@ -165,6 +167,7 @@ from .api.files.router import router as files_router
 from .api.claude_md.router import router as claude_md_router
 from .api.mentions.router import router as mentions_router
 from .api.github.router import router as github_router
+from .api.messages.router import router as messages_router
 
 _auth = [Depends(get_current_user)]
 app.include_router(projects_router, dependencies=_auth)
@@ -177,3 +180,4 @@ app.include_router(files_router, dependencies=_auth)
 app.include_router(claude_md_router, dependencies=_auth)
 app.include_router(mentions_router, dependencies=_auth)
 app.include_router(github_router, dependencies=_auth)
+app.include_router(messages_router, dependencies=_auth)

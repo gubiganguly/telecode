@@ -30,6 +30,21 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions(project_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at);
 
+CREATE TABLE IF NOT EXISTS messages (
+    id          TEXT PRIMARY KEY,
+    session_id  TEXT NOT NULL,
+    role        TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+    content     TEXT NOT NULL DEFAULT '',
+    thinking    TEXT NOT NULL DEFAULT '',
+    tool_uses   TEXT NOT NULL DEFAULT '[]',
+    usage       TEXT DEFAULT NULL,
+    cost_usd    REAL DEFAULT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);
+
 CREATE TABLE IF NOT EXISTS api_keys (
     id              TEXT PRIMARY KEY,
     name            TEXT NOT NULL,

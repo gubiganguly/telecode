@@ -14,6 +14,7 @@ from ...services.claude.process_manager import ProcessManager
 from ...services.claude.stream_parser import ParsedEvent
 from ...services.projects.project_service import ProjectService
 from ...services.sessions.session_service import SessionService
+from ...services.messages.message_service import MessageService
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(default="")):
     session_service: SessionService = websocket.app.state.session_service
     project_service: ProjectService = websocket.app.state.project_service
     api_key_service: ApiKeyService = websocket.app.state.api_key_service
+    message_service: MessageService = websocket.app.state.message_service
 
     running_tasks: dict[str, asyncio.Task] = {}
 
@@ -167,11 +169,20 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(default="")):
                             )
                         )
 
+                # Persist user message
+                try:
+                    await message_service.save_message(
+                        session_id=session_id, role="user", content=message
+                    )
+                except Exception:
+                    logger.warning("Failed to persist user message for session %s", session_id, exc_info=True)
+
                 # Stream in a background task
                 task = asyncio.create_task(
                     _stream_response(
                         websocket=websocket,
                         process_manager=process_manager,
+                        message_service=message_service,
                         session_id=session_id,
                         project_id=project_id,
                         project_path=project_path,
@@ -199,6 +210,7 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(default="")):
 async def _stream_response(
     websocket: WebSocket,
     process_manager: ProcessManager,
+    message_service: MessageService,
     session_id: str,
     project_id: str,
     project_path: Path,
@@ -208,6 +220,32 @@ async def _stream_response(
     max_budget_usd: float | None,
 ) -> None:
     """Background task: streams Claude's response events to the WebSocket."""
+    # Accumulators for persisting the assistant message
+    full_content = ""
+    full_thinking = ""
+    tool_uses_acc: list[dict] = []
+    final_usage = None
+    final_cost = None
+
+    async def _persist_assistant():
+        if full_content or full_thinking or tool_uses_acc:
+            try:
+                await message_service.save_message(
+                    session_id=session_id,
+                    role="assistant",
+                    content=full_content,
+                    thinking=full_thinking,
+                    tool_uses=tool_uses_acc,
+                    usage=final_usage,
+                    cost_usd=final_cost,
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to persist assistant message for session %s",
+                    session_id,
+                    exc_info=True,
+                )
+
     try:
         await websocket.send_json(
             {"type": "message_start", "session_id": session_id}
@@ -226,6 +264,30 @@ async def _stream_response(
             if outbound:
                 await websocket.send_json(outbound)
 
+            # Accumulate content for persistence
+            if event.type == "text_delta":
+                full_content += event.data.get("text", "")
+            elif event.type == "thinking_delta":
+                full_thinking += event.data.get("thinking", "")
+            elif event.type == "tool_use_start":
+                tool_uses_acc.append({
+                    "toolId": event.data.get("tool_id", ""),
+                    "toolName": event.data.get("tool_name", ""),
+                    "input": event.data.get("input", {}),
+                    "isComplete": False,
+                })
+            elif event.type == "tool_result":
+                tool_id = event.data.get("tool_id", "")
+                for tu in tool_uses_acc:
+                    if tu["toolId"] == tool_id:
+                        tu["output"] = event.data.get("output", "")
+                        tu["isError"] = event.data.get("is_error", False)
+                        tu["isComplete"] = True
+                        break
+            elif event.type == "message_complete":
+                final_usage = event.data.get("usage")
+                final_cost = event.data.get("cost_usd")
+
             # When AskUserQuestion is detected, stop streaming and wait for user input.
             # The CLI blocks on stdin (PIPE) waiting for an answer it won't get,
             # so we kill the process and let the user's answer trigger a new --resume.
@@ -234,10 +296,14 @@ async def _stream_response(
                 and event.data.get("tool_name") == "AskUserQuestion"
             ):
                 await process_manager.cancel(session_id)
+                await _persist_assistant()
                 await websocket.send_json(
                     {"type": "input_required", "session_id": session_id}
                 )
                 return
+
+        # Stream completed successfully — persist
+        await _persist_assistant()
 
     except asyncio.CancelledError:
         pass

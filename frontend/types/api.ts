@@ -258,3 +258,28 @@ export interface GitHubPushResponse {
 export interface GitHubLinkRepoRequest {
   repo_url: string;
 }
+
+// Messages
+export interface MessageInfo {
+  id: string;
+  session_id: string;
+  role: "user" | "assistant";
+  content: string;
+  thinking: string;
+  tool_uses: {
+    toolId: string;
+    toolName: string;
+    input: Record<string, unknown>;
+    output?: string;
+    isError?: boolean;
+    isComplete?: boolean;
+  }[];
+  usage: Record<string, number> | null;
+  cost_usd: number | null;
+  created_at: string;
+}
+
+export interface MessageListResponse {
+  messages: MessageInfo[];
+  total: number;
+}

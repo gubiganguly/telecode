@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { setToken, isAuthenticated } from "@/lib/auth";
 import { API_BASE_URL } from "@/lib/constants";
+import { wsManager } from "@/lib/websocket";
 import { useEffect } from "react";
 
 export default function LoginPage() {
@@ -41,6 +42,7 @@ export default function LoginPage() {
 
       const { token } = await res.json();
       setToken(token);
+      wsManager.connect();
       router.replace("/projects");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");

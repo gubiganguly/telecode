@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 
-from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -44,20 +43,14 @@ class Settings(BaseSettings):
     github_callback_url: str = "http://localhost:8000/api/github/auth/callback"
     frontend_url: str = "http://localhost:3000"
 
-    # CORS — accepts JSON array or comma-separated string
-    cors_origins: list[str] = ["http://localhost:3000", "http://localhost:3001"]
+    # CORS — plain string, parsed into a list by get_cors_origins()
+    cors_origins: str = "http://localhost:3000,http://localhost:3001"
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, v: object) -> list[str]:
-        if isinstance(v, list):
-            return v
-        if isinstance(v, str):
-            v = v.strip()
-            if v.startswith("["):
-                return json.loads(v)
-            return [origin.strip() for origin in v.split(",") if origin.strip()]
-        return []
+    def get_cors_origins(self) -> list[str]:
+        v = self.cors_origins.strip()
+        if v.startswith("["):
+            return json.loads(v)
+        return [origin.strip() for origin in v.split(",") if origin.strip()]
 
     model_config = {"env_prefix": "TELECODE_", "env_file": ".env"}
 

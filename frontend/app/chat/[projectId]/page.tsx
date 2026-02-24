@@ -56,10 +56,8 @@ export default function ChatPage({
 
   const { resolve } = useMentionResolver(projectId);
 
-  // Only enable polling when panel is open and not on mobile
-  const showFileTree = fileTreeOpen && !isMobile;
   const { tree, loading: treeLoading, error: treeError, refresh: refreshTree } =
-    useFileTree(projectId, showFileTree);
+    useFileTree(projectId, fileTreeOpen);
 
   // Fetch project info
   useEffect(() => {
@@ -174,11 +172,11 @@ export default function ChatPage({
         projectName={projectName}
         sessionName={sessionName}
         showMenuButton={isMobile}
-        fileTreeOpen={showFileTree}
+        fileTreeOpen={fileTreeOpen}
       />
 
       <FileTreePanel
-        open={showFileTree}
+        open={fileTreeOpen}
         onClose={toggleFileTree}
         tree={tree}
         loading={treeLoading}

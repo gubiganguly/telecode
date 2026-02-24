@@ -29,8 +29,11 @@ class Settings(BaseSettings):
     fallback_model: str = "haiku"
     process_timeout_seconds: int = 600
 
-    # Auth (disabled for now — add before deploying to server)
-    auth_enabled: bool = False
+    # Auth
+    auth_enabled: bool = True
+    auth_password: str = ""  # Set via TELECODE_AUTH_PASSWORD
+    auth_secret: str = ""  # Set via TELECODE_AUTH_SECRET (JWT signing key)
+    auth_token_expiry_hours: int = 720  # 30 days
 
     # GitHub OAuth — register one OAuth App at github.com/settings/developers
     # and set these via env vars or .env (users never need to touch this)

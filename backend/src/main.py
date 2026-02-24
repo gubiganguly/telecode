@@ -4,12 +4,13 @@ import shutil
 import subprocess
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import settings
 from .core.database import db
 from .core.exceptions import register_exception_handlers
+from .core.security import get_current_user
 
 # Configure app-level logging so diagnostics actually appear in the console
 logging.basicConfig(
@@ -117,8 +118,14 @@ app.add_middleware(
 
 register_exception_handlers(app)
 
-# Routers
+# Routers — public (no auth)
 from .api.health.router import router as health_router
+from .api.auth.router import router as auth_router
+
+app.include_router(health_router)
+app.include_router(auth_router)
+
+# Routers — protected (require JWT)
 from .api.projects.router import router as projects_router
 from .api.sessions.router import router as sessions_router
 from .api.chat.router import router as chat_router
@@ -130,14 +137,14 @@ from .api.claude_md.router import router as claude_md_router
 from .api.mentions.router import router as mentions_router
 from .api.github.router import router as github_router
 
-app.include_router(health_router)
-app.include_router(projects_router)
-app.include_router(sessions_router)
-app.include_router(chat_router)
-app.include_router(api_keys_router)
-app.include_router(commands_router)
-app.include_router(mcps_router)
-app.include_router(files_router)
-app.include_router(claude_md_router)
-app.include_router(mentions_router)
-app.include_router(github_router)
+_auth = [Depends(get_current_user)]
+app.include_router(projects_router, dependencies=_auth)
+app.include_router(sessions_router, dependencies=_auth)
+app.include_router(chat_router)  # WebSocket handles its own auth
+app.include_router(api_keys_router, dependencies=_auth)
+app.include_router(commands_router, dependencies=_auth)
+app.include_router(mcps_router, dependencies=_auth)
+app.include_router(files_router, dependencies=_auth)
+app.include_router(claude_md_router, dependencies=_auth)
+app.include_router(mentions_router, dependencies=_auth)
+app.include_router(github_router, dependencies=_auth)

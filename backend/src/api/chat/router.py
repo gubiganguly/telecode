@@ -3,9 +3,10 @@ import json
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 
 from ...core.exceptions import ProjectNotFoundError, SessionNotFoundError
+from ...core.security import authenticate_websocket
 from ...schemas.chat import ChatMessageType
 from ...services.api_keys.api_key_service import ApiKeyService
 from ...services.chat.title_generator import generate_title
@@ -20,13 +21,17 @@ router = APIRouter()
 
 
 @router.websocket("/ws/chat")
-async def chat_websocket(websocket: WebSocket):
+async def chat_websocket(websocket: WebSocket, token: str = Query(default="")):
     """WebSocket endpoint for bidirectional chat with Claude.
 
     Protocol:
     - Client sends JSON: send_message, cancel, or ping
     - Server sends JSON events: text_delta, thinking_delta, tool_use_start, etc.
     """
+    if not await authenticate_websocket(token):
+        await websocket.close(code=1008, reason="Unauthorized")
+        return
+
     await websocket.accept()
 
     process_manager: ProcessManager = websocket.app.state.process_manager

@@ -9,10 +9,7 @@ Ideas and features to implement.
 ### 1. Optional Brainstorming Chat
 Add a brainstorming mode where the user can flesh out an idea before starting implementation. The conversation output gets saved to `/planning/BRAINSTORM.md` inside that project for reference.
 
-### 2. Push to GitHub Button
-One-click button to push the project to GitHub. If the remote repo doesn't exist yet, automatically create it first, then push.
-
-### 3. Pinned Chats / Agents
+### 2. Pinned Chats / Agents
 Allow users to pin persistent, role-based chat agents to a project. Each pinned agent has a defined role, context scope, and set of capabilities it can perform autonomously.
 
 **Example — Project Manager Agent:**

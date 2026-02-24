@@ -112,6 +112,8 @@ done
 # ---------------------------------------------------------------------------
 echo ""
 echo "Starting Cloudflare tunnel..."
+# Unset TUNNEL_TOKEN so cloudflared uses local config instead of token mode
+unset TUNNEL_TOKEN
 cloudflared tunnel run casperbot > "$LOG_DIR/tunnel.log" 2>&1 &
 TUNNEL_PID=$!
 sleep 3

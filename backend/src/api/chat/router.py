@@ -29,6 +29,7 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(default="")):
     - Server sends JSON events: text_delta, thinking_delta, tool_use_start, etc.
     """
     if not await authenticate_websocket(token):
+        await websocket.accept()
         await websocket.close(code=1008, reason="Unauthorized")
         return
 

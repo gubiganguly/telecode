@@ -1,10 +1,10 @@
 import type { SlashCommand } from "@/types/chat";
 
 export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export const WS_URL =
-  process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/ws/chat";
+  process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/ws/chat";
 
 export const SLASH_COMMANDS: SlashCommand[] = [
   { command: "/commit", label: "Commit", description: "Stage changes and create a git commit" },

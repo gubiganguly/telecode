@@ -22,7 +22,7 @@ export function SettingsTabBar({
   onSelectSection,
 }: SettingsTabBarProps) {
   return (
-    <div className="flex border-b border-border bg-bg-secondary/50 backdrop-blur-md">
+    <div className="flex overflow-x-auto border-b border-border bg-bg-secondary/50 backdrop-blur-md scrollbar-hide">
       {TABS.map((tab) => {
         const isActive = activeSection === tab.id;
         const Icon = tab.icon;
@@ -32,7 +32,7 @@ export function SettingsTabBar({
             key={tab.id}
             onClick={() => onSelectSection(tab.id)}
             className={cn(
-              "flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors cursor-pointer",
+              "flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors cursor-pointer",
               isActive
                 ? "text-accent border-b-2 border-accent"
                 : "text-text-tertiary hover:text-text-secondary"

@@ -1,0 +1,48 @@
+"use client";
+
+import { Terminal, Key, Plug, FileText, Github } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { SettingsSection } from "./settings-sidebar";
+
+const TABS = [
+  { id: "claude-md" as const, label: "CLAUDE.md", icon: FileText },
+  { id: "commands" as const, label: "Commands", icon: Terminal },
+  { id: "api-keys" as const, label: "Keys", icon: Key },
+  { id: "mcps" as const, label: "MCPs", icon: Plug },
+  { id: "github" as const, label: "GitHub", icon: Github },
+];
+
+interface SettingsTabBarProps {
+  activeSection: SettingsSection;
+  onSelectSection: (section: SettingsSection) => void;
+}
+
+export function SettingsTabBar({
+  activeSection,
+  onSelectSection,
+}: SettingsTabBarProps) {
+  return (
+    <div className="flex border-b border-border bg-bg-secondary/50 backdrop-blur-md">
+      {TABS.map((tab) => {
+        const isActive = activeSection === tab.id;
+        const Icon = tab.icon;
+
+        return (
+          <button
+            key={tab.id}
+            onClick={() => onSelectSection(tab.id)}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors cursor-pointer",
+              isActive
+                ? "text-accent border-b-2 border-accent"
+                : "text-text-tertiary hover:text-text-secondary"
+            )}
+          >
+            <Icon size={16} />
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}

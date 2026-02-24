@@ -1,0 +1,155 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-bg-primary: #2b2a27;
+  --color-bg-secondary: #353430;
+  --color-bg-tertiary: #3f3e39;
+  --color-bg-input: #1f1e1b;
+  --color-text-primary: #e8e4dc;
+  --color-text-secondary: #a8a49b;
+  --color-text-tertiary: #706c63;
+  --color-accent: #c87941;
+  --color-accent-hover: #d98a52;
+  --color-accent-muted: rgba(200, 121, 65, 0.15);
+  --color-success: #7d9b6a;
+  --color-error: #c45d4e;
+  --color-warning: #d4a843;
+  --color-border: #454340;
+  --color-border-focus: #c87941;
+  --color-thinking-bg: #2f2e2a;
+  --color-tool-bg: #33322d;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+}
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    overscroll-behavior: none;
+  }
+
+  ::selection {
+    background: rgba(200, 121, 65, 0.3);
+    color: var(--color-text-primary);
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-tertiary);
+  }
+}
+
+/* Streaming cursor */
+@keyframes blink-cursor {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.streaming-cursor::after {
+  content: "▊";
+  animation: blink-cursor 1s step-end infinite;
+  color: var(--color-accent);
+  margin-left: 1px;
+}
+
+/* Spinning asterisk for thinking */
+@keyframes spin-asterisk {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.thinking-spinner {
+  animation: spin-asterisk 3s linear infinite;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Session status pulse */
+@keyframes session-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.session-pulse {
+  animation: session-pulse 1.5s ease-in-out infinite;
+}
+
+/* Skeleton pulse */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+
+.skeleton-pulse {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+/* Tiptap editor — kill ALL browser focus outlines on every element inside the editor wrapper */
+.tiptap,
+.tiptap *,
+.tiptap:focus,
+.tiptap:focus-visible,
+.ProseMirror,
+.ProseMirror:focus,
+.ProseMirror:focus-visible,
+[data-node-type="editor-content"],
+[data-node-type="editor-content"] *:focus,
+[data-node-type="editor-content"] *:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.tiptap.chat-editor-content {
+  border: none !important;
+  min-height: 1.5rem;
+  max-height: 9rem;
+  overflow-y: auto;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+}
+
+.tiptap.chat-editor-content p {
+  margin: 0;
+}
+
+.tiptap.chat-editor-content p.is-editor-empty:first-child::before {
+  color: var(--color-text-tertiary);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Mention chips inline */
+.tiptap.chat-editor-content .mention-chip {
+  background: rgba(200, 121, 65, 0.15);
+  color: var(--color-accent);
+  border-radius: 0.375rem;
+  padding: 0.125rem 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}

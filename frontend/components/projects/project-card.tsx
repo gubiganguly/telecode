@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { GitBranch, FileText, Trash2, MoreVertical, Upload, Github, Loader2 } from "lucide-react";
+import { GitBranch, FileText, Trash2, MoreVertical, Upload, Github, Loader2, Pin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogTitle } from "@/components/ui/dialog";
@@ -63,16 +63,18 @@ export function ProjectCard({ project, onDelete, index }: ProjectCardProps) {
         transition={{ duration: 0.2, delay: index * 0.05 }}
         whileHover={{ y: -2 }}
       >
-        {/* Menu button */}
-        <button
-          className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-bg-tertiary text-text-tertiary hover:text-text-primary cursor-pointer"
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowMenu(!showMenu);
-          }}
-        >
-          <MoreVertical size={16} />
-        </button>
+        {/* Menu button — only show if there are menu actions */}
+        {(!project.is_system || hasGitHubRepo) && (
+          <button
+            className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-bg-tertiary text-text-tertiary hover:text-text-primary cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowMenu(!showMenu);
+            }}
+          >
+            <MoreVertical size={16} />
+          </button>
+        )}
 
         {/* Dropdown menu */}
         {showMenu && (
@@ -105,16 +107,18 @@ export function ProjectCard({ project, onDelete, index }: ProjectCardProps) {
                   {pushing ? "Pushing..." : "Push to GitHub"}
                 </button>
               )}
-              <button
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-error hover:bg-error/10 transition-colors cursor-pointer"
-                onClick={() => {
-                  setShowMenu(false);
-                  setShowDeleteConfirm(true);
-                }}
-              >
-                <Trash2 size={14} />
-                Delete
-              </button>
+              {!project.is_system && (
+                <button
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-error hover:bg-error/10 transition-colors cursor-pointer"
+                  onClick={() => {
+                    setShowMenu(false);
+                    setShowDeleteConfirm(true);
+                  }}
+                >
+                  <Trash2 size={14} />
+                  Delete
+                </button>
+              )}
             </div>
           </>
         )}
@@ -130,6 +134,12 @@ export function ProjectCard({ project, onDelete, index }: ProjectCardProps) {
         )}
 
         <div className="flex items-center gap-3 text-xs text-text-tertiary">
+          {project.is_pinned && (
+            <Badge variant="default" className="gap-1">
+              <Pin size={11} />
+              Pinned
+            </Badge>
+          )}
           {project.has_git && project.git_branch && (
             <Badge variant="default" className="gap-1">
               <GitBranch size={11} />
@@ -158,7 +168,7 @@ export function ProjectCard({ project, onDelete, index }: ProjectCardProps) {
       <Dialog open={showDeleteConfirm} onClose={() => { setShowDeleteConfirm(false); setDeleteRepo(false); }}>
         <DialogTitle>Delete &ldquo;{project.name}&rdquo;?</DialogTitle>
         <p className="text-sm text-text-secondary mb-4">
-          This will remove the project from Telecode. You can choose whether to
+          This will remove the project from CasperBot. You can choose whether to
           also delete the files from disk.
         </p>
 
@@ -190,7 +200,7 @@ export function ProjectCard({ project, onDelete, index }: ProjectCardProps) {
             onClick={() => handleDelete(false)}
             disabled={deleting}
           >
-            Remove from Telecode only
+            Remove from CasperBot only
           </Button>
           <Button
             variant="ghost"

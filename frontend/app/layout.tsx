@@ -14,7 +14,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Telecode",
+  title: "CasperBot",
   description: "Remote control for Claude Code",
 };
 

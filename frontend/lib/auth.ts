@@ -1,4 +1,4 @@
-const TOKEN_KEY = "telecode_token";
+const TOKEN_KEY = "casperbot_token";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;

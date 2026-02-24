@@ -14,7 +14,7 @@ warn() { echo -e "  ${YELLOW}!${NC} $1"; }
 fail() { echo -e "  ${RED}✗${NC} $1"; }
 
 echo ""
-echo -e "${BOLD}=== Telecode Setup ===${NC}"
+echo -e "${BOLD}=== CasperBot Setup ===${NC}"
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -133,20 +133,20 @@ if [ -z "$SKIP_ENV" ]; then
   # Write .env.production
   cat > "$SCRIPT_DIR/.env.production" <<EOF
 # === Auth ===
-TELECODE_AUTH_PASSWORD=$PASSWORD
-TELECODE_AUTH_SECRET=$AUTH_SECRET
+CASPERBOT_AUTH_PASSWORD=$PASSWORD
+CASPERBOT_AUTH_SECRET=$AUTH_SECRET
 
 # === URLs ===
-TELECODE_CORS_ORIGINS=https://$DOMAIN
-TELECODE_FRONTEND_URL=https://$DOMAIN
-TELECODE_GITHUB_CALLBACK_URL=https://$DOMAIN/api/github/auth/callback
+CASPERBOT_CORS_ORIGINS=https://$DOMAIN
+CASPERBOT_FRONTEND_URL=https://$DOMAIN
+CASPERBOT_GITHUB_CALLBACK_URL=https://$DOMAIN/api/github/auth/callback
 
 # Frontend (build-time — baked into JS bundle)
 NEXT_PUBLIC_WS_URL=wss://$DOMAIN/ws/chat
 
 # === GitHub OAuth (optional) ===
-TELECODE_GITHUB_CLIENT_ID=
-TELECODE_GITHUB_CLIENT_SECRET=
+CASPERBOT_GITHUB_CLIENT_ID=
+CASPERBOT_GITHUB_CLIENT_SECRET=
 EOF
 
   ok "Created .env.production"

@@ -17,7 +17,7 @@ import {
 } from "@/hooks/use-mention-resolver";
 import type { MentionItem } from "@/types/mentions";
 
-const FILE_TREE_STORAGE_KEY = "telecode-file-tree-open";
+const FILE_TREE_STORAGE_KEY = "casperbot-file-tree-open";
 
 export default function ChatPage({
   params,

@@ -1,4 +1,4 @@
-# Telecode — Architecture
+# CasperBot — Architecture
 
 > Auto-generated architecture overview. Last updated: 2026-02-23
 >
@@ -6,7 +6,7 @@
 
 ## System Overview
 
-**Telecode** is a web-based remote control for [Claude Code](https://code.claude.com). It wraps the Claude Code CLI (`claude -p`) in a FastAPI backend, exposing it over WebSocket so a Next.js frontend can provide a full coding assistant experience from any device — phone, tablet, or laptop.
+**CasperBot** is a web-based remote control for [Claude Code](https://code.claude.com). It wraps the Claude Code CLI (`claude -p`) in a FastAPI backend, exposing it over WebSocket so a Next.js frontend can provide a full coding assistant experience from any device — phone, tablet, or laptop.
 
 **Core idea:** User's browser → WebSocket → FastAPI backend → spawns `claude -p` subprocess → Claude edits files on the server → streams results back to the browser.
 
@@ -27,14 +27,14 @@
 | Encryption | Fernet (cryptography) for API keys at rest |
 | AI Titles | Anthropic SDK (Claude Haiku) for session auto-titling |
 | CLI | Claude Code CLI (`claude -p --output-format stream-json`) |
-| Config | pydantic-settings (env vars with `TELECODE_` prefix) |
+| Config | pydantic-settings (env vars with `CASPERBOT_` prefix) |
 | Tunnel | Cloudflare Tunnel (cloudflared) |
 | Service | macOS launchd for auto-start on boot |
 
 ## Project Structure
 
 ```
-telecode/
+casperbot/
 ├── frontend/                   # Next.js app
 │   ├── app/                    # App Router pages
 │   │   ├── page.tsx            # Root → redirects to /projects
@@ -98,7 +98,7 @@ telecode/
 │   └── requirements.txt
 │
 ├── service/                    # macOS launchd auto-start
-│   ├── com.telecode.plist      # Service definition (template with __TELECODE_DIR__)
+│   ├── com.casperbot.plist      # Service definition (template with __CASPERBOT_DIR__)
 │   ├── install.sh              # Register with launchctl
 │   └── uninstall.sh            # Unregister
 │
@@ -179,10 +179,10 @@ JWT-based auth protects all endpoints except health check and login.
 
 ```
 User → POST /api/auth/login { password }
-    ↓ compare against TELECODE_AUTH_PASSWORD env var
+    ↓ compare against CASPERBOT_AUTH_PASSWORD env var
 Backend → create_access_token() → JWT (HS256, 30d expiry)
     ↓
-Frontend → localStorage.setItem('telecode_token', jwt)
+Frontend → localStorage.setItem('casperbot_token', jwt)
     ↓
 All REST requests → Authorization: Bearer <jwt>
 WebSocket → wss://domain/ws/chat?token=<jwt>
@@ -343,7 +343,7 @@ All REST endpoints return `APIResponse[T]`: `{"success": true, "data": {...}, "e
 
 ### Data Layer
 
-SQLite at `backend/data/telecode.db`. Four tables:
+SQLite at `backend/data/casperbot.db`. Four tables:
 
 ```sql
 projects        (id TEXT PK, name, slug, path, description, github_repo_url, created_at, updated_at)
@@ -471,20 +471,20 @@ ingress:
 
 ### Environment Variables
 
-**Backend (`TELECODE_` prefix):**
+**Backend (`CASPERBOT_` prefix):**
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `TELECODE_AUTH_PASSWORD` | Login password | (required) |
-| `TELECODE_AUTH_SECRET` | JWT signing key (HS256) | (required) |
-| `TELECODE_AUTH_TOKEN_EXPIRY_HOURS` | Token lifetime | 720 (30 days) |
-| `TELECODE_CORS_ORIGINS` | Allowed origins (comma-separated) | `http://localhost:3000,http://localhost:3001` |
-| `TELECODE_PROJECTS_DIR` | Projects root directory | `~/Claude Code Projects` |
-| `TELECODE_DEFAULT_MODEL` | Default Claude model | `sonnet` |
-| `TELECODE_MAX_BUDGET_USD` | Budget per request | 5.0 |
-| `TELECODE_PROCESS_TIMEOUT_SECONDS` | CLI timeout | 600 |
-| `TELECODE_GITHUB_CLIENT_ID` | GitHub OAuth app ID | (optional) |
-| `TELECODE_GITHUB_CLIENT_SECRET` | GitHub OAuth app secret | (optional) |
+| `CASPERBOT_AUTH_PASSWORD` | Login password | (required) |
+| `CASPERBOT_AUTH_SECRET` | JWT signing key (HS256) | (required) |
+| `CASPERBOT_AUTH_TOKEN_EXPIRY_HOURS` | Token lifetime | 720 (30 days) |
+| `CASPERBOT_CORS_ORIGINS` | Allowed origins (comma-separated) | `http://localhost:3000,http://localhost:3001` |
+| `CASPERBOT_PROJECTS_DIR` | Projects root directory | `~/Claude Code Projects` |
+| `CASPERBOT_DEFAULT_MODEL` | Default Claude model | `sonnet` |
+| `CASPERBOT_MAX_BUDGET_USD` | Budget per request | 5.0 |
+| `CASPERBOT_PROCESS_TIMEOUT_SECONDS` | CLI timeout | 600 |
+| `CASPERBOT_GITHUB_CLIENT_ID` | GitHub OAuth app ID | (optional) |
+| `CASPERBOT_GITHUB_CLIENT_SECRET` | GitHub OAuth app secret | (optional) |
 
 **Frontend (build-time, baked into JS bundle):**
 
@@ -495,15 +495,15 @@ ingress:
 
 ### launchd Service
 
-Auto-starts Telecode on macOS boot:
+Auto-starts CasperBot on macOS boot:
 
 ```bash
 ./service/install.sh      # Install and start
 ./service/uninstall.sh    # Remove
 
 # Manual control
-launchctl kickstart -k gui/$(id -u)/com.telecode  # Restart
-launchctl print gui/$(id -u)/com.telecode          # Status
+launchctl kickstart -k gui/$(id -u)/com.casperbot  # Restart
+launchctl print gui/$(id -u)/com.casperbot          # Status
 ```
 
 ## Security

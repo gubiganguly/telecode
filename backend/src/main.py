@@ -2,7 +2,10 @@ import logging
 import os
 import shutil
 import subprocess
+import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,6 +28,30 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # Startup
     await db.connect()
+
+    # Seed the CasperBot system project if it doesn't exist
+    async with db.conn.execute(
+        "SELECT id FROM projects WHERE is_system = 1 AND name = 'CasperBot'"
+    ) as cursor:
+        if not await cursor.fetchone():
+            app_root = str(Path(__file__).resolve().parent.parent.parent)
+            now = datetime.now(timezone.utc).isoformat()
+            await db.conn.execute(
+                """INSERT INTO projects
+                   (id, name, slug, path, description, created_at, updated_at, is_pinned, is_system)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)""",
+                (
+                    str(uuid.uuid4()),
+                    "CasperBot",
+                    "casperbot",
+                    app_root,
+                    "CasperBot's own codebase",
+                    now,
+                    now,
+                ),
+            )
+            await db.conn.commit()
+            logger.info("Seeded CasperBot system project (path: %s)", app_root)
 
     # Ensure root projects directory and templates exist
     settings.projects_dir.mkdir(parents=True, exist_ok=True)
@@ -102,7 +129,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Telecode API",
+    title="CasperBot API",
     description="Remote control API for Claude Code CLI",
     version="0.1.0",
     lifespan=lifespan,

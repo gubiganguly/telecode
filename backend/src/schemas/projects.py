@@ -25,6 +25,8 @@ class ProjectInfo(BaseModel):
     has_git: bool | None = None
     git_branch: str | None = None
     github_repo_url: str = ""
+    is_pinned: bool = False
+    is_system: bool = False
 
 
 class ProjectListResponse(BaseModel):

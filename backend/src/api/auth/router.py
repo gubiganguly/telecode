@@ -21,7 +21,7 @@ async def login(body: LoginRequest):
     if not settings.auth_password:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Auth not configured. Set TELECODE_AUTH_PASSWORD.",
+            detail="Auth not configured. Set CASPERBOT_AUTH_PASSWORD.",
         )
 
     if body.password != settings.auth_password:

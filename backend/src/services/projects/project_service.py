@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ...core.config import settings
 from ...core.database import db
-from ...core.exceptions import ProjectAlreadyExistsError, ProjectNotFoundError
+from ...core.exceptions import ProjectAlreadyExistsError, ProjectNotFoundError, SystemProjectError
 from ...utils.helpers import slugify
 
 
@@ -18,7 +18,7 @@ class ProjectService:
         await self._sync_filesystem_to_db()
 
         async with db.conn.execute(
-            "SELECT * FROM projects ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+            "SELECT * FROM projects ORDER BY is_pinned DESC, updated_at DESC LIMIT ? OFFSET ?",
             (limit, offset),
         ) as cursor:
             rows = await cursor.fetchall()
@@ -116,6 +116,9 @@ class ProjectService:
         self, project_id: str, delete_files: bool = False
     ) -> None:
         project = await self.get_project(project_id)
+
+        if project.get("is_system"):
+            raise SystemProjectError("Cannot delete a system project")
 
         if delete_files:
             project_path = Path(project["path"])
@@ -311,6 +314,8 @@ class ProjectService:
         project["has_git"] = has_git
         project["git_branch"] = git_branch
         project["github_repo_url"] = project.get("github_repo_url", "")
+        project["is_pinned"] = bool(project.get("is_pinned", 0))
+        project["is_system"] = bool(project.get("is_system", 0))
         return project
 
     async def _sync_filesystem_to_db(self) -> None:

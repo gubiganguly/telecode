@@ -16,6 +16,8 @@ export interface ProjectInfo {
   has_git: boolean | null;
   git_branch: string | null;
   github_repo_url: string;
+  is_pinned: boolean;
+  is_system: boolean;
 }
 
 export interface ProjectListResponse {

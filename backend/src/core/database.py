@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS projects (
     path        TEXT NOT NULL UNIQUE,
     description TEXT DEFAULT '',
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    is_pinned   INTEGER DEFAULT 0,
+    is_system   INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -68,6 +70,24 @@ class Database:
         try:
             await self._connection.execute(
                 "ALTER TABLE projects ADD COLUMN github_repo_url TEXT DEFAULT ''"
+            )
+            await self._connection.commit()
+        except Exception:
+            pass  # Column already exists
+
+        # Migration: add is_pinned column to projects if missing
+        try:
+            await self._connection.execute(
+                "ALTER TABLE projects ADD COLUMN is_pinned INTEGER DEFAULT 0"
+            )
+            await self._connection.commit()
+        except Exception:
+            pass  # Column already exists
+
+        # Migration: add is_system column to projects if missing
+        try:
+            await self._connection.execute(
+                "ALTER TABLE projects ADD COLUMN is_system INTEGER DEFAULT 0"
             )
             await self._connection.commit()
         except Exception:

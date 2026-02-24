@@ -37,7 +37,7 @@ export default function ProjectsPage() {
               <Zap size={16} className="text-white" />
             </div>
             <h1 className="text-lg font-semibold text-text-primary">
-              Telecode
+              CasperBot
             </h1>
           </motion.div>
 

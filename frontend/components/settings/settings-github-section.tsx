@@ -116,7 +116,7 @@ export function SettingsGitHubSection({
           </h3>
           <p className="text-sm text-text-tertiary mb-6 max-w-sm">
             Connect your GitHub account to create repositories and push code
-            directly from Telecode.
+            directly from CasperBot.
           </p>
           <Button onClick={handleConnect} className="gap-2">
             <Github size={16} />
@@ -129,7 +129,7 @@ export function SettingsGitHubSection({
       {!connected && !loading && (
         <div className="mt-6 rounded-xl border border-border bg-bg-secondary p-5">
           <p className="text-xs text-text-tertiary leading-relaxed">
-            Telecode uses GitHub OAuth to securely connect your account. Your
+            CasperBot uses GitHub OAuth to securely connect your account. Your
             access token is encrypted and stored locally — it is never sent to
             any third party.
           </p>

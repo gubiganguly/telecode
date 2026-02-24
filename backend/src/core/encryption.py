@@ -10,7 +10,7 @@ _MASTER_KEY_PATH = settings.database_path.parent / ".master.key"
 
 def _load_or_create_key() -> bytes:
     """Load the master encryption key from env or file, creating one if needed."""
-    env_key = os.environ.get("TELECODE_ENCRYPTION_KEY")
+    env_key = os.environ.get("CASPERBOT_ENCRYPTION_KEY")
     if env_key:
         return env_key.encode()
 

@@ -18,7 +18,7 @@ warn() { echo -e "  ${YELLOW}!${NC} $1"; }
 # ---------------------------------------------------------------------------
 # Pre-flight checks
 # ---------------------------------------------------------------------------
-echo "=== Telecode Start ==="
+echo "=== CasperBot Start ==="
 echo ""
 
 if [ ! -f "$SCRIPT_DIR/.env.production" ]; then

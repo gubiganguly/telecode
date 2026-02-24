@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    app_name: str = "Telecode"
+    app_name: str = "CasperBot"
     debug: bool = False
     host: str = "0.0.0.0"
     port: int = 8000
@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     projects_dir: Path = Path.home() / "Claude Code Projects"
     templates_dir: Path = Path.home() / "Claude Code Projects" / ".templates"
     database_path: Path = (
-        Path(__file__).resolve().parent.parent.parent / "data" / "telecode.db"
+        Path(__file__).resolve().parent.parent.parent / "data" / "casperbot.db"
     )
 
     # MCP plugins
@@ -32,8 +32,8 @@ class Settings(BaseSettings):
 
     # Auth
     auth_enabled: bool = True
-    auth_password: str = ""  # Set via TELECODE_AUTH_PASSWORD
-    auth_secret: str = ""  # Set via TELECODE_AUTH_SECRET (JWT signing key)
+    auth_password: str = ""  # Set via CASPERBOT_AUTH_PASSWORD
+    auth_secret: str = ""  # Set via CASPERBOT_AUTH_SECRET (JWT signing key)
     auth_token_expiry_hours: int = 720  # 30 days
 
     # GitHub OAuth — register one OAuth App at github.com/settings/developers
@@ -52,7 +52,7 @@ class Settings(BaseSettings):
             return json.loads(v)
         return [origin.strip() for origin in v.split(",") if origin.strip()]
 
-    model_config = {"env_prefix": "TELECODE_", "env_file": ".env"}
+    model_config = {"env_prefix": "CASPERBOT_", "env_file": ".env"}
 
 
 settings = Settings()

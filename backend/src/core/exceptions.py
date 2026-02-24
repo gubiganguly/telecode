@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 
-class TelecodeError(Exception):
+class CasperBotError(Exception):
     status_code: int = 500
 
     def __init__(self, message: str) -> None:
@@ -10,58 +10,62 @@ class TelecodeError(Exception):
         super().__init__(message)
 
 
-class ProjectNotFoundError(TelecodeError):
+class ProjectNotFoundError(CasperBotError):
     status_code = 404
 
 
-class ProjectAlreadyExistsError(TelecodeError):
+class ProjectAlreadyExistsError(CasperBotError):
     status_code = 409
 
 
-class SessionNotFoundError(TelecodeError):
+class SessionNotFoundError(CasperBotError):
     status_code = 404
 
 
-class SessionBusyError(TelecodeError):
+class SessionBusyError(CasperBotError):
     status_code = 409
 
 
-class ApiKeyNotFoundError(TelecodeError):
+class ApiKeyNotFoundError(CasperBotError):
     status_code = 404
 
 
-class CommandNotFoundError(TelecodeError):
+class CommandNotFoundError(CasperBotError):
     status_code = 404
 
 
-class CommandConflictError(TelecodeError):
+class CommandConflictError(CasperBotError):
     status_code = 409
 
 
-class CommandGenerationError(TelecodeError):
+class CommandGenerationError(CasperBotError):
     status_code = 422
 
 
-class McpInstallError(TelecodeError):
+class McpInstallError(CasperBotError):
     status_code = 422
 
 
-class McpNotFoundError(TelecodeError):
+class McpNotFoundError(CasperBotError):
     status_code = 404
 
 
-class GitHubNotConnectedError(TelecodeError):
+class GitHubNotConnectedError(CasperBotError):
     status_code = 401
 
 
-class GitHubApiError(TelecodeError):
+class GitHubApiError(CasperBotError):
     status_code = 502
 
 
+class SystemProjectError(CasperBotError):
+    status_code = 403
+
+
 def register_exception_handlers(app: FastAPI) -> None:
-    @app.exception_handler(TelecodeError)
-    async def telecode_error_handler(
-        request: Request, exc: TelecodeError
+    @app.exception_handler(CasperBotError)
+    async def casperbot_error_handler(
+        request: Request, exc: CasperBotError
     ) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,

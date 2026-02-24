@@ -63,7 +63,7 @@ export default function LoginPage() {
           <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mb-2">
             <Lock className="w-6 h-6 text-accent" />
           </div>
-          <h1 className="text-xl font-semibold text-text-primary">Telecode</h1>
+          <h1 className="text-xl font-semibold text-text-primary">CasperBot</h1>
           <p className="text-sm text-text-secondary">Enter your password to continue</p>
         </div>
 

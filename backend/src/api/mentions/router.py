@@ -60,7 +60,7 @@ async def fetch_url(body: UrlFetchRequest):
             timeout=FETCH_TIMEOUT,
             max_redirects=5,
         ) as client:
-            response = await client.get(body.url, headers={"User-Agent": "Telecode/1.0"})
+            response = await client.get(body.url, headers={"User-Agent": "CasperBot/1.0"})
             response.raise_for_status()
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="URL fetch timed out")

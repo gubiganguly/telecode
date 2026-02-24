@@ -17,7 +17,7 @@ check() {
   fi
 }
 
-echo "=== Telecode Status ==="
+echo "=== CasperBot Status ==="
 echo ""
 
 check "Backend " 8000 "http://localhost:8000/api/health"

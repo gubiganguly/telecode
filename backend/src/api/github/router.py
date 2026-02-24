@@ -20,20 +20,24 @@ from ...schemas.projects import ProjectInfo
 
 logger = logging.getLogger(__name__)
 
+# Public router — OAuth flow (no JWT required, browser navigates directly)
+public_router = APIRouter(prefix="/api/github", tags=["github"])
+
+# Protected router — everything else (JWT required)
 router = APIRouter(prefix="/api/github", tags=["github"])
 
 
-# --- OAuth Flow ---
+# --- OAuth Flow (public) ---
 
 
-@router.get("/auth/login")
+@public_router.get("/auth/login")
 async def github_login(request: Request):
     service = request.app.state.github_service
     url = service.get_login_url()
     return RedirectResponse(url=url)
 
 
-@router.get("/auth/callback")
+@public_router.get("/auth/callback")
 async def github_callback(request: Request, code: str = Query(...)):
     service = request.app.state.github_service
     try:

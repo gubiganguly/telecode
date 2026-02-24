@@ -148,9 +148,11 @@ register_exception_handlers(app)
 # Routers — public (no auth)
 from .api.health.router import router as health_router
 from .api.auth.router import router as auth_router
+from .api.github.router import public_router as github_public_router
 
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(github_public_router)
 
 # Routers — protected (require JWT)
 from .api.projects.router import router as projects_router

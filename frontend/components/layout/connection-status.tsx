@@ -7,13 +7,17 @@ import { wsManager, type ConnectionStatus as WsStatus } from "@/lib/websocket";
 import { isAuthenticated } from "@/lib/auth";
 
 export function ConnectionStatus() {
-  const [status, setStatus] = useState<WsStatus>(wsManager.getStatus());
+  const [status, setStatus] = useState<WsStatus>("disconnected");
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+    setStatus(wsManager.getStatus());
     return wsManager.onStatusChange(setStatus);
   }, []);
 
   const show =
+    mounted &&
     isAuthenticated() &&
     (status === "reconnecting" || status === "disconnected");
 

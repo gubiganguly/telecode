@@ -3,7 +3,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="$SCRIPT_DIR/logs"
-PID_FILE="$LOG_DIR/.pids"
+SCRIPTS_DIR="$SCRIPT_DIR/scripts"
 mkdir -p "$LOG_DIR"
 
 RED='\033[0;31m'
@@ -33,108 +33,45 @@ set +a
 ok "Loaded .env.production"
 
 # ---------------------------------------------------------------------------
-# Kill anything already on our ports
-# ---------------------------------------------------------------------------
-echo ""
-echo "Cleaning up stale processes..."
-
-for PORT in 8000 3000; do
-  STALE_PIDS=$(lsof -ti:$PORT 2>/dev/null || true)
-  if [ -n "$STALE_PIDS" ]; then
-    echo "$STALE_PIDS" | xargs kill -9 2>/dev/null || true
-    warn "Killed stale process on port $PORT"
-  fi
-done
-
-# Kill any existing cloudflared tunnel for casperbot
-pkill -f "cloudflared tunnel run casperbot" 2>/dev/null || true
-sleep 1
-
-# ---------------------------------------------------------------------------
-# Backend
+# Start each service
 # ---------------------------------------------------------------------------
 echo ""
 echo "Starting backend..."
-cd "$SCRIPT_DIR/backend"
-source venv/bin/activate
-uvicorn src.main:app --host 0.0.0.0 --port 8000 > "$LOG_DIR/backend.log" 2>&1 &
-BACKEND_PID=$!
-
-# Wait for backend to be ready
-for i in $(seq 1 15); do
-  if curl -s http://localhost:8000/api/health > /dev/null 2>&1; then
-    ok "Backend running (PID $BACKEND_PID)"
-    break
-  fi
-  if [ $i -eq 15 ]; then
-    fail "Backend failed to start. Check $LOG_DIR/backend.log"
-    kill $BACKEND_PID 2>/dev/null || true
-    exit 1
-  fi
-  sleep 1
-done
-
-# ---------------------------------------------------------------------------
-# Frontend
-# ---------------------------------------------------------------------------
-echo ""
-echo "Building frontend (this may take a moment)..."
-cd "$SCRIPT_DIR/frontend"
-
-if npm run build > "$LOG_DIR/frontend-build.log" 2>&1; then
-  ok "Frontend built"
+if "$SCRIPTS_DIR/start-backend.sh"; then
+  ok "Backend running"
 else
-  fail "Frontend build failed. Check $LOG_DIR/frontend-build.log"
-  kill $BACKEND_PID 2>/dev/null || true
+  fail "Backend failed to start. Check $LOG_DIR/backend.log"
   exit 1
 fi
 
-echo "Starting frontend..."
-npm start > "$LOG_DIR/frontend.log" 2>&1 &
-FRONTEND_PID=$!
+echo ""
+echo "Starting frontend (building if needed)..."
+if "$SCRIPTS_DIR/start-frontend.sh"; then
+  ok "Frontend running"
+else
+  fail "Frontend failed to start. Check $LOG_DIR/frontend-build.log"
+  exit 1
+fi
 
-# Wait for frontend to be ready
-for i in $(seq 1 15); do
-  if curl -s http://localhost:3000 > /dev/null 2>&1; then
-    ok "Frontend running (PID $FRONTEND_PID)"
-    break
-  fi
-  if [ $i -eq 15 ]; then
-    fail "Frontend failed to start. Check $LOG_DIR/frontend.log"
-    kill $BACKEND_PID $FRONTEND_PID 2>/dev/null || true
-    exit 1
-  fi
-  sleep 1
-done
-
-# ---------------------------------------------------------------------------
-# Cloudflare Tunnel
-# ---------------------------------------------------------------------------
 echo ""
 echo "Starting Cloudflare tunnel..."
-# Unset TUNNEL_TOKEN so cloudflared uses local config instead of token mode
-unset TUNNEL_TOKEN
-cloudflared tunnel run casperbot > "$LOG_DIR/tunnel.log" 2>&1 &
-TUNNEL_PID=$!
-sleep 3
-
-if kill -0 $TUNNEL_PID 2>/dev/null; then
-  ok "Tunnel running (PID $TUNNEL_PID)"
+if "$SCRIPTS_DIR/start-tunnel.sh"; then
+  ok "Tunnel running"
 else
-  fail "Tunnel failed to start. Check $LOG_DIR/tunnel.log"
+  warn "Tunnel failed to start. Check $LOG_DIR/tunnel.log"
   warn "Backend and frontend are still running — just no public access."
 fi
 
 # ---------------------------------------------------------------------------
-# Save PIDs & print summary
+# Summary
 # ---------------------------------------------------------------------------
-echo "$BACKEND_PID $FRONTEND_PID $TUNNEL_PID" > "$PID_FILE"
-
 echo ""
 echo -e "${GREEN}=== All services running ===${NC}"
 echo ""
 echo "  Local:   http://localhost:3000"
 echo "  Public:  https://casperbot.net"
+echo ""
+echo "  Enable auto-restart: ./service/install.sh"
 echo ""
 echo "  Logs:"
 echo "    tail -f $LOG_DIR/backend.log"

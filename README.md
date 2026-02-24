@@ -44,7 +44,9 @@ Your Local Files
 - **Mobile-responsive** — full mobile layout with sidebar drawer, tab bar navigation, and touch-friendly controls
 - **Password-protected** — JWT auth with 30-day token expiry
 - **One-command deploy** — `./start.sh` starts backend, frontend, and Cloudflare Tunnel
-- **Auto-start on boot** — macOS launchd service, no terminal needed
+- **Auto-restart on crash** — watchdog monitor checks all 3 processes every 5 seconds, restarts any that die
+- **Auto-start on boot** — macOS launchd service keeps the monitor alive, no terminal needed
+- **Self-modifiable** — pinned CasperBot project lets you modify the app's own codebase through the chat interface
 
 ---
 
@@ -79,19 +81,23 @@ Starts backend (port 8000), frontend (port 3000), and Cloudflare Tunnel. Health-
 - **Local:** [http://localhost:3000](http://localhost:3000)
 - **Public:** `https://yourdomain.com` (via Cloudflare Tunnel)
 
-### 4. Auto-start on boot (optional)
+### 4. Auto-restart on boot (recommended)
 
 ```bash
 ./service/install.sh
 ```
 
-Registers a macOS launchd service. CasperBot starts automatically when your Mac boots.
+Installs a launchd service that runs a watchdog monitor. The monitor:
+- Starts all 3 processes on boot
+- Health-checks every 5 seconds (curl for backend/frontend, PID check for tunnel)
+- Auto-restarts any process that crashes — recovery within seconds
+- Backs off after 10 consecutive failures to avoid log spam
 
 ### 5. Management
 
 ```bash
-./status.sh                  # Check what's running
-./stop.sh                    # Stop everything
+./status.sh                  # Check what's running (including monitor)
+./stop.sh                    # Stop everything (monitor + all services)
 ./service/uninstall.sh       # Remove auto-start
 ```
 
@@ -140,13 +146,19 @@ casperbot/
 │   ├── data/                      # SQLite database + master key (gitignored)
 │   └── requirements.txt
 │
+├── scripts/                       # Process management
+│   ├── monitor.sh                 # Watchdog: health-checks + auto-restart loop
+│   ├── start-backend.sh           # Idempotent backend starter
+│   ├── start-frontend.sh          # Idempotent frontend starter
+│   └── start-tunnel.sh            # Idempotent tunnel starter
+│
 ├── service/                       # macOS launchd auto-start
-│   ├── com.casperbot.plist         # Service definition
+│   ├── com.casperbot.plist         # Service definition (runs monitor.sh)
 │   ├── install.sh                 # Register with launchctl
 │   └── uninstall.sh               # Unregister
 │
-├── start.sh                       # Start all services
-├── stop.sh                        # Stop all services
+├── start.sh                       # Manual start (delegates to scripts/)
+├── stop.sh                        # Stop everything (monitor + services)
 ├── status.sh                      # Check what's running
 ├── setup.sh                       # Interactive first-time setup
 ├── .env.production                # Production env vars (gitignored)

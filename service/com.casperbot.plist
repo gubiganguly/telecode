@@ -7,7 +7,8 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>__CASPERBOT_DIR__/start.sh</string>
+        <string>/bin/bash</string>
+        <string>__CASPERBOT_DIR__/scripts/monitor.sh</string>
     </array>
 
     <key>WorkingDirectory</key>
@@ -17,7 +18,10 @@
     <true/>
 
     <key>KeepAlive</key>
-    <false/>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>5</integer>
 
     <key>StandardOutPath</key>
     <string>__CASPERBOT_DIR__/logs/launchd-stdout.log</string>

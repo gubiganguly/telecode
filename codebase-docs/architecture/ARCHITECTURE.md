@@ -97,14 +97,20 @@ casperbot/
 │   ├── data/                   # SQLite DB + master key (gitignored)
 │   └── requirements.txt
 │
+├── scripts/                    # Process management
+│   ├── monitor.sh              # Watchdog loop: health-checks + auto-restart
+│   ├── start-backend.sh        # Idempotent backend starter
+│   ├── start-frontend.sh       # Idempotent frontend starter
+│   └── start-tunnel.sh         # Idempotent tunnel starter
+│
 ├── service/                    # macOS launchd auto-start
-│   ├── com.casperbot.plist      # Service definition (template with __CASPERBOT_DIR__)
+│   ├── com.casperbot.plist      # Service definition (runs monitor.sh, KeepAlive: true)
 │   ├── install.sh              # Register with launchctl
 │   └── uninstall.sh            # Unregister
 │
-├── start.sh                    # Start all services (backend + frontend + tunnel)
-├── stop.sh                     # Stop all services
-├── status.sh                   # Check what's running
+├── start.sh                    # Manual start (delegates to scripts/)
+├── stop.sh                     # Stop all (monitor + services + launchd)
+├── status.sh                   # Check what's running (including monitor)
 ├── setup.sh                    # Interactive first-time setup
 ├── .env.production             # Production env vars (gitignored)
 ├── .env.production.example     # Template for env vars
@@ -463,11 +469,38 @@ ingress:
 | Script | Purpose |
 |--------|---------|
 | `setup.sh` | Interactive first-time setup: installs deps, prompts for domain/password, generates JWT secret |
-| `start.sh` | Loads env, kills stale processes, starts backend/frontend/tunnel with health checks |
-| `stop.sh` | Kills all services by PID + port fallback |
-| `status.sh` | Shows which services are running and responding |
-| `service/install.sh` | Registers launchd service for auto-start on boot |
+| `start.sh` | Manual startup: delegates to the 3 start scripts below |
+| `stop.sh` | Stops monitor + launchd service + all 3 processes |
+| `status.sh` | Shows monitor status + which services are running |
+| `scripts/monitor.sh` | **Watchdog loop**: health-checks every 5s, auto-restarts crashed processes |
+| `scripts/start-backend.sh` | Idempotent: starts backend if not already running + healthy |
+| `scripts/start-frontend.sh` | Idempotent: starts frontend, skips build if `.next/` exists |
+| `scripts/start-tunnel.sh` | Idempotent: starts cloudflared tunnel if not running |
+| `service/install.sh` | Registers launchd service (runs monitor.sh with `KeepAlive: true`) |
 | `service/uninstall.sh` | Removes launchd service |
+
+### Process Resilience
+
+CasperBot includes a self-referencing project that lets a Claude agent modify the app's own codebase. Since the agent has `Bash(*)` permission, it can accidentally kill processes. The watchdog monitor ensures automatic recovery.
+
+```
+launchd (KeepAlive: true)
+  └── scripts/monitor.sh (restarts if killed)
+        ├── checks backend  every 5s → curl /api/health → restart if down
+        ├── checks frontend every 5s → curl localhost:3000 → restart if down
+        └── checks tunnel   every 5s → PID check → restart if down
+```
+
+| Scenario | Recovery |
+|----------|----------|
+| Agent kills cloudflared | Monitor detects within 5s, restarts tunnel |
+| Agent kills backend | Monitor detects within 5s, restarts uvicorn |
+| Agent kills the monitor | launchd restarts monitor, monitor restarts dead processes |
+| Agent corrupts scripts | Scripts are under git — `git checkout -- scripts/` reverts |
+
+**Backoff**: After 10 consecutive restart failures, the monitor tries once every ~5 minutes instead of every 5 seconds.
+
+**Frontend restarts**: Skip `npm run build` if `.next/` exists (fast restart in ~3s). Pass `--rebuild` flag to force a fresh build after code changes.
 
 ### Environment Variables
 
@@ -495,15 +528,16 @@ ingress:
 
 ### launchd Service
 
-Auto-starts CasperBot on macOS boot:
+Auto-starts CasperBot on macOS boot. The plist runs `scripts/monitor.sh` with `KeepAlive: true` — if the monitor crashes, launchd restarts it within 5 seconds (`ThrottleInterval: 5`).
 
 ```bash
-./service/install.sh      # Install and start
+./service/install.sh      # Install monitor as launchd service
 ./service/uninstall.sh    # Remove
 
 # Manual control
-launchctl kickstart -k gui/$(id -u)/com.casperbot  # Restart
+launchctl kickstart -k gui/$(id -u)/com.casperbot  # Restart monitor
 launchctl print gui/$(id -u)/com.casperbot          # Status
+./status.sh                                         # Check all processes
 ```
 
 ## Security

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { WifiOff } from "lucide-react";
 import { wsManager, type ConnectionStatus as WsStatus } from "@/lib/websocket";
+import { isAuthenticated } from "@/lib/auth";
 
 export function ConnectionStatus() {
   const [status, setStatus] = useState<WsStatus>(wsManager.getStatus());
@@ -12,7 +13,9 @@ export function ConnectionStatus() {
     return wsManager.onStatusChange(setStatus);
   }, []);
 
-  const show = status === "reconnecting" || status === "disconnected";
+  const show =
+    isAuthenticated() &&
+    (status === "reconnecting" || status === "disconnected");
 
   return (
     <AnimatePresence>

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
-import { Send, Square } from "lucide-react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import { Send, Square, Mic } from "lucide-react";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import {
   SlashCommandPalette,
   getFilteredCommands,
@@ -9,11 +10,16 @@ import {
 import { ChatEditor, type ChatEditorRef } from "./chat-editor";
 import { cn } from "@/lib/utils";
 import { useSlashCommands } from "@/hooks/use-slash-commands";
+import { useElapsedTime } from "@/hooks/use-elapsed-time";
+import { useStore } from "@/lib/store";
 import type { SlashCommand } from "@/types/chat";
 import type { MentionItem } from "@/types/mentions";
 
+const STALE_THRESHOLD_MS = 30_000;
+
 interface ChatInputProps {
   projectId: string;
+  sessionId: string | null;
   onSend: (text: string, mentions: MentionItem[]) => void;
   onCancel: () => void;
   isStreaming: boolean;
@@ -22,6 +28,7 @@ interface ChatInputProps {
 
 export function ChatInput({
   projectId,
+  sessionId,
   onSend,
   onCancel,
   isStreaming,
@@ -102,6 +109,38 @@ export function ChatInput({
 
   const hasText = editorText.trim().length > 0;
 
+  const handleTranscript = useCallback(
+    (text: string) => {
+      editorRef.current?.insertText(text);
+    },
+    []
+  );
+
+  const { isListening, isSupported, toggle: toggleMic } = useSpeechRecognition({
+    onTranscript: handleTranscript,
+  });
+
+  // Elapsed time & staleness detection
+  const elapsed = useElapsedTime(isStreaming);
+  const lastEventAt = useStore(
+    (s) => (sessionId ? s.lastEventAt[sessionId] : undefined) ?? 0
+  );
+  const [isStale, setIsStale] = useState(false);
+
+  useEffect(() => {
+    if (!isStreaming || !lastEventAt) {
+      setIsStale(false);
+      return;
+    }
+    // Check immediately
+    setIsStale(Date.now() - lastEventAt > STALE_THRESHOLD_MS);
+    // Re-check every second
+    const timer = setInterval(() => {
+      setIsStale(Date.now() - lastEventAt > STALE_THRESHOLD_MS);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isStreaming, lastEventAt]);
+
   return (
     <div className="relative border-t border-border bg-bg-primary pb-[env(safe-area-inset-bottom)]">
       <SlashCommandPalette
@@ -135,15 +174,49 @@ export function ChatInput({
           />
         </div>
 
+        {/* Mic button — only shown when browser supports Speech Recognition */}
+        {isSupported && !isStreaming && (
+          <button
+            onClick={toggleMic}
+            className={cn(
+              "shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-colors cursor-pointer",
+              isListening
+                ? "bg-error/15 text-error mic-pulse"
+                : "bg-bg-tertiary text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/80"
+            )}
+            title={isListening ? "Stop listening" : "Voice input"}
+          >
+            <Mic size={16} />
+          </button>
+        )}
+
         {/* Send / Cancel button */}
         {isStreaming ? (
-          <button
-            onClick={onCancel}
-            className="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl bg-error/10 text-error hover:bg-error/20 transition-colors cursor-pointer"
-            title="Stop generating"
-          >
-            <Square size={16} fill="currentColor" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {elapsed && (
+              <span
+                className={cn(
+                  "text-xs tabular-nums transition-colors",
+                  isStale ? "text-warning" : "text-text-tertiary"
+                )}
+                title={isStale ? "No response from server" : "Elapsed time"}
+              >
+                {elapsed}
+                {isStale && (
+                  <span className="block text-[10px] leading-tight">
+                    unresponsive
+                  </span>
+                )}
+              </span>
+            )}
+            <button
+              onClick={onCancel}
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-error/10 text-error hover:bg-error/20 transition-colors cursor-pointer"
+              title="Stop generating"
+            >
+              <Square size={16} fill="currentColor" />
+            </button>
+          </div>
         ) : (
           <button
             onClick={handleManualSend}

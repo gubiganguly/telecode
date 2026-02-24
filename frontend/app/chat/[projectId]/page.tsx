@@ -162,6 +162,7 @@ export default function ChatPage({
 
       <ChatArea
         projectId={projectId}
+        sessionId={activeSessionId}
         messages={messages}
         isStreaming={isStreaming}
         onSend={handleSend}

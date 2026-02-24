@@ -25,8 +25,10 @@ interface AppState {
   // Chat
   selectedModel: string;
   messages: Record<string, ChatMessage[]>;
+  messagesLoaded: Record<string, boolean>;
   isStreaming: Record<string, boolean>;
   isWaitingForInput: Record<string, boolean>;
+  lastEventAt: Record<string, number>;
 
   // Project actions
   fetchProjects: () => Promise<void>;
@@ -43,10 +45,37 @@ interface AppState {
   renameSession: (id: string, name: string) => Promise<void>;
 
   // Chat actions
+  fetchMessages: (sessionId: string) => Promise<void>;
   setSelectedModel: (model: string) => void;
   sendMessage: (text: string, projectId: string, sessionId: string, displayText?: string) => void;
   cancelRequest: (sessionId: string) => void;
   handleWsEvent: (event: OutboundEvent) => void;
+}
+
+// Cancel timeout tracking (outside store — not serializable)
+const cancelTimeouts: Record<string, ReturnType<typeof setTimeout>> = {};
+
+function forceCancelSession(sessionId: string) {
+  // Clear any pending cancel timeout
+  if (cancelTimeouts[sessionId]) {
+    clearTimeout(cancelTimeouts[sessionId]);
+    delete cancelTimeouts[sessionId];
+  }
+
+  useStore.setState((draft) => {
+    const msgs = draft.messages[sessionId];
+    if (msgs?.length) {
+      const last = msgs[msgs.length - 1];
+      if (last.role === "assistant") {
+        last.isStreaming = false;
+        for (const tool of last.toolUses) {
+          if (!tool.isComplete) tool.isComplete = true;
+        }
+      }
+    }
+    draft.isStreaming[sessionId] = false;
+    draft.isWaitingForInput[sessionId] = false;
+  });
 }
 
 export const useStore = create<AppState>()(
@@ -63,8 +92,10 @@ export const useStore = create<AppState>()(
     isDraftMode: false,
     selectedModel: DEFAULT_MODEL,
     messages: {},
+    messagesLoaded: {},
     isStreaming: {},
     isWaitingForInput: {},
+    lastEventAt: {},
 
     // Project actions
     fetchProjects: async () => {
@@ -149,6 +180,10 @@ export const useStore = create<AppState>()(
           s.isDraftMode = false;
         }
       });
+      // Fetch persisted messages if not already loaded
+      if (sessionId && !get().messagesLoaded[sessionId]) {
+        get().fetchMessages(sessionId);
+      }
     },
 
     enterDraftMode: () => {
@@ -167,8 +202,10 @@ export const useStore = create<AppState>()(
           s.activeSessionId = s.sessions.length > 0 ? s.sessions[0].id : null;
         }
         delete s.messages[id];
+        delete s.messagesLoaded[id];
         delete s.isStreaming[id];
         delete s.isWaitingForInput[id];
+        delete s.lastEventAt[id];
       });
     },
 
@@ -181,6 +218,48 @@ export const useStore = create<AppState>()(
     },
 
     // Chat actions
+    fetchMessages: async (sessionId: string) => {
+      if (get().messagesLoaded[sessionId]) return;
+
+      // Mark loaded immediately to prevent duplicate fetches
+      set((s) => {
+        s.messagesLoaded[sessionId] = true;
+      });
+
+      try {
+        const data = await api.listMessages(sessionId);
+        set((s) => {
+          // Only populate if no messages exist yet (don't overwrite in-flight streaming)
+          if (!s.messages[sessionId] || s.messages[sessionId].length === 0) {
+            s.messages[sessionId] = data.messages.map((m) => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              thinking: m.thinking,
+              toolUses: m.tool_uses.map((t) => ({
+                toolId: t.toolId,
+                toolName: t.toolName,
+                input: t.input,
+                output: t.output,
+                isError: t.isError,
+                isComplete: true,
+              })),
+              isStreaming: false,
+              isComplete: true,
+              timestamp: m.created_at,
+              usage: m.usage ?? undefined,
+              costUsd: m.cost_usd ?? undefined,
+            }));
+          }
+        });
+      } catch {
+        // Reset so it can be retried
+        set((s) => {
+          s.messagesLoaded[sessionId] = false;
+        });
+      }
+    },
+
     setSelectedModel: (model: string) => {
       set((s) => {
         s.selectedModel = model;
@@ -254,7 +333,23 @@ export const useStore = create<AppState>()(
     },
 
     cancelRequest: (sessionId: string) => {
-      wsManager.send({ type: "cancel", session_id: sessionId });
+      const sent = wsManager.send({ type: "cancel", session_id: sessionId });
+
+      if (!sent) {
+        // WebSocket disconnected — force-reset UI immediately
+        forceCancelSession(sessionId);
+        return;
+      }
+
+      // Set a timeout: if server doesn't confirm within 5s, force-reset
+      if (cancelTimeouts[sessionId]) clearTimeout(cancelTimeouts[sessionId]);
+      cancelTimeouts[sessionId] = setTimeout(() => {
+        delete cancelTimeouts[sessionId];
+        // Only force if still streaming (server may have responded already)
+        if (get().isStreaming[sessionId]) {
+          forceCancelSession(sessionId);
+        }
+      }, 5000);
     },
 
     handleWsEvent: (event: OutboundEvent) => {
@@ -288,6 +383,17 @@ export const useStore = create<AppState>()(
       set((s) => {
         if (!s.messages[sid]) s.messages[sid] = [];
         const msgs = s.messages[sid];
+
+        // Track last event time for staleness detection
+        if (
+          event.type === "message_start" ||
+          event.type === "text_delta" ||
+          event.type === "thinking_delta" ||
+          event.type === "tool_use_start" ||
+          event.type === "tool_result"
+        ) {
+          s.lastEventAt[sid] = Date.now();
+        }
 
         switch (event.type) {
           case "message_start": {
@@ -399,6 +505,11 @@ export const useStore = create<AppState>()(
           }
 
           case "cancelled": {
+            // Clear cancel timeout — server confirmed cancellation
+            if (cancelTimeouts[sid]) {
+              clearTimeout(cancelTimeouts[sid]);
+              delete cancelTimeouts[sid];
+            }
             const last = msgs[msgs.length - 1];
             if (last?.role === "assistant") {
               last.isStreaming = false;

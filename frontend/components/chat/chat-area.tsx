@@ -9,6 +9,7 @@ import type { MentionItem } from "@/types/mentions";
 
 interface ChatAreaProps {
   projectId: string;
+  sessionId: string | null;
   messages: ChatMessage[];
   isStreaming: boolean;
   onSend: (text: string, mentions: MentionItem[]) => void;
@@ -24,6 +25,7 @@ interface ChatAreaProps {
 
 export function ChatArea({
   projectId,
+  sessionId,
   messages,
   isStreaming,
   onSend,
@@ -55,6 +57,7 @@ export function ChatArea({
 
       <ChatInput
         projectId={projectId}
+        sessionId={sessionId}
         onSend={onSend}
         onCancel={onCancel}
         isStreaming={isStreaming}

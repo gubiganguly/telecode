@@ -3,7 +3,9 @@
 export type InboundMessage =
   | SendMessagePayload
   | CancelPayload
-  | PingPayload;
+  | PingPayload
+  | SubscribePayload
+  | UnsubscribePayload;
 
 export interface SendMessagePayload {
   type: "send_message";
@@ -23,6 +25,16 @@ export interface PingPayload {
   type: "ping";
 }
 
+export interface SubscribePayload {
+  type: "subscribe";
+  session_id: string;
+}
+
+export interface UnsubscribePayload {
+  type: "unsubscribe";
+  session_id: string;
+}
+
 // --- Outbound (backend → frontend) ---
 
 export type OutboundEvent =
@@ -37,7 +49,8 @@ export type OutboundEvent =
   | SessionRenamedEvent
   | CancelledEvent
   | PongEvent
-  | ErrorEvent;
+  | ErrorEvent
+  | TaskReplayEvent;
 
 export interface MessageStartEvent {
   type: "message_start";
@@ -111,6 +124,13 @@ export interface ErrorEvent {
   session_id?: string;
   error: string;
   code?: string;
+}
+
+export interface TaskReplayEvent {
+  type: "task_replay";
+  session_id: string;
+  events: OutboundEvent[];
+  is_complete: boolean;
 }
 
 // --- Frontend chat model ---

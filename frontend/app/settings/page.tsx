@@ -8,23 +8,25 @@ import { Button } from "@/components/ui/button";
 import { SettingsSidebar, type SettingsSection } from "@/components/settings/settings-sidebar";
 import { SettingsTabBar } from "@/components/settings/settings-tab-bar";
 import { SettingsCommandsSection } from "@/components/settings/settings-commands-section";
-import { SettingsApiKeysSection } from "@/components/settings/settings-api-keys-section";
+import { SettingsCredentialsSection } from "@/components/settings/settings-credentials-section";
 import { SettingsMcpsSection } from "@/components/settings/settings-mcps-section";
 import { SettingsClaudeMdSection } from "@/components/settings/settings-claude-md-section";
-import { ApiKeyDialog } from "@/components/settings/api-key-dialog";
+import { CredentialDialog } from "@/components/settings/credential-dialog";
 import { CommandCreateDialog } from "@/components/settings/command-create-dialog";
 import { McpInstallDialog } from "@/components/settings/mcp-install-dialog";
 import { SettingsGitHubSection } from "@/components/settings/settings-github-section";
-import { useApiKeys } from "@/hooks/use-api-keys";
+import { SettingsApprovalsSection } from "@/components/settings/settings-approvals-section";
+import { useCredentials } from "@/hooks/use-credentials";
 import { useCommands } from "@/hooks/use-commands";
 import { useMcps } from "@/hooks/use-mcps";
 import { useClaudeMd } from "@/hooks/use-claude-md";
 import { useGitHub } from "@/hooks/use-github";
+import { useGlobalApprovals } from "@/hooks/use-global-approvals";
 import { useMobile } from "@/hooks/use-mobile";
-import type { ApiKeyInfo, CommandInfo } from "@/types/api";
+import type { CredentialInfo, CommandInfo } from "@/types/api";
 
 export default function SettingsPage() {
-  const { keys, loading: keysLoading, createKey, updateKey, deleteKey } = useApiKeys();
+  const { credentials, loading: credentialsLoading, createCredential, updateCredential, deleteCredential } = useCredentials();
   const {
     commands,
     loading: commandsLoading,
@@ -49,11 +51,17 @@ export default function SettingsPage() {
     updateClaudeMd,
     setContent: setClaudeMdContent,
   } = useClaudeMd();
+  const {
+    enabled: approvalsEnabled,
+    loading: approvalsLoading,
+    saving: approvalsSaving,
+    toggle: toggleApprovals,
+  } = useGlobalApprovals();
   const isMobile = useMobile();
 
   const [activeSection, setActiveSection] = useState<SettingsSection>("claude-md");
-  const [showKeyDialog, setShowKeyDialog] = useState(false);
-  const [editKey, setEditKey] = useState<ApiKeyInfo | null>(null);
+  const [showCredentialDialog, setShowCredentialDialog] = useState(false);
+  const [editCredential, setEditCredential] = useState<CredentialInfo | null>(null);
   const [showCommandDialog, setShowCommandDialog] = useState(false);
   const [editCommand, setEditCommand] = useState<CommandInfo | null>(null);
   const [showMcpDialog, setShowMcpDialog] = useState(false);
@@ -76,32 +84,32 @@ export default function SettingsPage() {
     contentRef.current?.scrollTo(0, 0);
   }, [activeSection]);
 
-  const handleKeySave = async (data: {
+  const handleCredentialSave = async (data: {
     name: string;
     service: string;
     env_var: string;
     value: string;
   }) => {
-    if (editKey) {
-      await updateKey(editKey.id, {
+    if (editCredential) {
+      await updateCredential(editCredential.id, {
         name: data.name,
         service: data.service,
         env_var: data.env_var,
         ...(data.value ? { value: data.value } : {}),
       });
     } else {
-      await createKey(data);
+      await createCredential(data);
     }
   };
 
-  const handleKeyEdit = (key: ApiKeyInfo) => {
-    setEditKey(key);
-    setShowKeyDialog(true);
+  const handleCredentialEdit = (credential: CredentialInfo) => {
+    setEditCredential(credential);
+    setShowCredentialDialog(true);
   };
 
-  const handleCloseKeyDialog = () => {
-    setShowKeyDialog(false);
-    setEditKey(null);
+  const handleCloseCredentialDialog = () => {
+    setShowCredentialDialog(false);
+    setEditCredential(null);
   };
 
   const handleCommandSave = async (data: { name: string; content: string }) => {
@@ -131,7 +139,7 @@ export default function SettingsPage() {
           onSelectSection={setActiveSection}
           counts={{
             commands: commands.length,
-            keys: keys.length,
+            credentials: credentials.length,
             mcps: mcps.length,
           }}
         />
@@ -192,14 +200,14 @@ export default function SettingsPage() {
                 onDeleteCommand={deleteCommand}
               />
             )}
-            {activeSection === "api-keys" && (
-              <SettingsApiKeysSection
-                key="api-keys"
-                keys={keys}
-                loading={keysLoading}
-                onCreateKey={() => setShowKeyDialog(true)}
-                onEditKey={handleKeyEdit}
-                onDeleteKey={deleteKey}
+            {activeSection === "credentials" && (
+              <SettingsCredentialsSection
+                key="credentials"
+                credentials={credentials}
+                loading={credentialsLoading}
+                onCreateCredential={() => setShowCredentialDialog(true)}
+                onEditCredential={handleCredentialEdit}
+                onDeleteCredential={deleteCredential}
               />
             )}
             {activeSection === "mcps" && (
@@ -208,6 +216,15 @@ export default function SettingsPage() {
                 mcps={mcps}
                 loading={mcpsLoading}
                 onAddMcp={() => setShowMcpDialog(true)}
+              />
+            )}
+            {activeSection === "approvals" && (
+              <SettingsApprovalsSection
+                key="approvals"
+                enabled={approvalsEnabled}
+                loading={approvalsLoading}
+                saving={approvalsSaving}
+                onToggle={toggleApprovals}
               />
             )}
             {activeSection === "github" && (
@@ -224,11 +241,11 @@ export default function SettingsPage() {
         </main>
       </div>
 
-      <ApiKeyDialog
-        open={showKeyDialog}
-        onClose={handleCloseKeyDialog}
-        onSave={handleKeySave}
-        editKey={editKey}
+      <CredentialDialog
+        open={showCredentialDialog}
+        onClose={handleCloseCredentialDialog}
+        onSave={handleCredentialSave}
+        editCredential={editCredential}
       />
 
       <CommandCreateDialog

@@ -28,7 +28,7 @@ async def list_projects(
 async def create_project(body: ProjectCreate, request: Request):
     service = request.app.state.project_service
     project = await service.create_project(
-        name=body.name, description=body.description
+        name=body.name, description=body.description, use_template=body.use_template
     )
     return APIResponse(data=project)
 

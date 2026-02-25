@@ -130,11 +130,17 @@ if [ -z "$SKIP_ENV" ]; then
   # Generate secret
   AUTH_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 
+  # Detect projects directory (parent of this repo)
+  PROJECTS_DIR="$(dirname "$SCRIPT_DIR")"
+
   # Write .env.production
   cat > "$SCRIPT_DIR/.env.production" <<EOF
 # === Auth ===
 CASPERBOT_AUTH_PASSWORD=$PASSWORD
 CASPERBOT_AUTH_SECRET=$AUTH_SECRET
+
+# === Paths ===
+CASPERBOT_PROJECTS_DIR=$PROJECTS_DIR
 
 # === URLs ===
 CASPERBOT_CORS_ORIGINS=https://$DOMAIN

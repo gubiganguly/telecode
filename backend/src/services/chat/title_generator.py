@@ -3,7 +3,7 @@ import os
 
 import anthropic
 
-from ..api_keys.api_key_service import ApiKeyService
+from ..credentials.credential_service import CredentialService
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ TITLE_PROMPT = (
 
 async def generate_title(
     message: str,
-    api_key_service: ApiKeyService,
+    credential_service: CredentialService,
 ) -> str | None:
     """Generate a short chat title using Claude Haiku.
 
@@ -24,8 +24,8 @@ async def generate_title(
     reason (missing API key, network error, etc.).
     """
     try:
-        # Try DB-stored key first, then fall back to environment variable
-        env_map = await api_key_service.get_decrypted_env_map()
+        # Try DB-stored credential first, then fall back to environment variable
+        env_map = await credential_service.get_decrypted_env_map()
         api_key = env_map.get("ANTHROPIC_API_KEY") or os.environ.get(
             "ANTHROPIC_API_KEY"
         )

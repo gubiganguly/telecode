@@ -4,27 +4,27 @@ import { motion } from "framer-motion";
 import { Key, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ApiKeyList } from "@/components/settings/api-key-list";
-import type { ApiKeyInfo } from "@/types/api";
+import { CredentialList } from "@/components/settings/credential-list";
+import type { CredentialInfo } from "@/types/api";
 
-interface SettingsApiKeysSectionProps {
-  keys: ApiKeyInfo[];
+interface SettingsCredentialsSectionProps {
+  credentials: CredentialInfo[];
   loading: boolean;
-  onCreateKey: () => void;
-  onEditKey: (key: ApiKeyInfo) => void;
-  onDeleteKey: (id: string) => Promise<void>;
+  onCreateCredential: () => void;
+  onEditCredential: (credential: CredentialInfo) => void;
+  onDeleteCredential: (id: string) => Promise<void>;
 }
 
-export function SettingsApiKeysSection({
-  keys,
+export function SettingsCredentialsSection({
+  credentials,
   loading,
-  onCreateKey,
-  onEditKey,
-  onDeleteKey,
-}: SettingsApiKeysSectionProps) {
+  onCreateCredential,
+  onEditCredential,
+  onDeleteCredential,
+}: SettingsCredentialsSectionProps) {
   return (
     <motion.div
-      key="api-keys"
+      key="credentials"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
@@ -35,7 +35,7 @@ export function SettingsApiKeysSection({
         <div>
           <h2 className="text-base font-semibold text-text-primary flex items-center gap-2">
             <Key size={18} />
-            API Keys
+            Credentials
           </h2>
           <p className="text-sm text-text-tertiary mt-0.5">
             Encrypted keys auto-injected into Claude CLI sessions
@@ -44,10 +44,10 @@ export function SettingsApiKeysSection({
         <Button
           size="sm"
           className="gap-1.5"
-          onClick={onCreateKey}
+          onClick={onCreateCredential}
         >
           <Plus size={16} />
-          <span className="hidden sm:inline">Add Key</span>
+          <span className="hidden sm:inline">Add Credential</span>
         </Button>
       </div>
 
@@ -57,28 +57,28 @@ export function SettingsApiKeysSection({
             <Skeleton key={i} className="h-24 rounded-xl" />
           ))}
         </div>
-      ) : keys.length === 0 ? (
+      ) : credentials.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <div className="w-14 h-14 rounded-2xl bg-bg-tertiary flex items-center justify-center mb-4">
             <Key size={24} className="text-text-tertiary" />
           </div>
           <h3 className="text-base font-medium text-text-primary mb-1">
-            No API keys yet
+            No credentials yet
           </h3>
           <p className="text-sm text-text-tertiary mb-6 max-w-sm">
             Add API keys to automatically inject them as environment
             variables in your Claude CLI sessions.
           </p>
-          <Button onClick={onCreateKey} className="gap-1.5">
+          <Button onClick={onCreateCredential} className="gap-1.5">
             <Plus size={16} />
-            Add Your First Key
+            Add Your First Credential
           </Button>
         </div>
       ) : (
-        <ApiKeyList
-          keys={keys}
-          onEdit={onEditKey}
-          onDelete={onDeleteKey}
+        <CredentialList
+          credentials={credentials}
+          onEdit={onEditCredential}
+          onDelete={onDeleteCredential}
         />
       )}
     </motion.div>

@@ -12,7 +12,7 @@ import type { ProjectInfo } from "@/types/api";
 interface CreateProjectDialogProps {
   open: boolean;
   onClose: () => void;
-  onCreate: (name: string, description?: string) => Promise<ProjectInfo>;
+  onCreate: (name: string, description?: string, useTemplate?: boolean) => Promise<ProjectInfo>;
 }
 
 export function CreateProjectDialog({
@@ -24,6 +24,7 @@ export function CreateProjectDialog({
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [useTemplate, setUseTemplate] = useState(true);
   const [createRepo, setCreateRepo] = useState(false);
   const [isPrivate, setIsPrivate] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -40,7 +41,7 @@ export function CreateProjectDialog({
     setError("");
     setStatus("");
     try {
-      const project = await onCreate(name.trim(), description.trim() || undefined);
+      const project = await onCreate(name.trim(), description.trim() || undefined, useTemplate);
 
       if (createRepo && githubConnected) {
         try {
@@ -62,6 +63,7 @@ export function CreateProjectDialog({
 
       setName("");
       setDescription("");
+      setUseTemplate(true);
       setCreateRepo(false);
       setStatus("");
       onClose();
@@ -102,6 +104,24 @@ export function CreateProjectDialog({
             className="flex w-full rounded-lg border border-border bg-bg-input px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary transition-colors focus:outline-none focus:ring-2 focus:ring-border-focus focus:border-transparent resize-none"
           />
         </div>
+
+        {/* Template import option */}
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={useTemplate}
+            onChange={(e) => setUseTemplate(e.target.checked)}
+            className="w-4 h-4 mt-0.5 rounded border-border accent-accent"
+          />
+          <div>
+            <span className="text-sm text-text-secondary">
+              Import global template
+            </span>
+            <p className="text-xs text-text-tertiary mt-0.5">
+              Copies your global CLAUDE.md and slash commands into this project
+            </p>
+          </div>
+        </label>
 
         {/* GitHub repo option */}
         {githubConnected ? (

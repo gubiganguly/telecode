@@ -23,6 +23,7 @@ class WebSocketManager {
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private eventHandler: EventHandler | null = null;
   private statusListeners = new Set<(status: ConnectionStatus) => void>();
+  private reconnectCallbacks = new Set<() => void>();
 
   connect(): void {
     if (this.ws?.readyState === WebSocket.OPEN) return;
@@ -45,9 +46,13 @@ class WebSocketManager {
     }
 
     this.ws.onopen = () => {
+      const wasReconnect = this.reconnectAttempt > 0;
       this.reconnectAttempt = 0;
       this.setStatus("connected");
       this.startPing();
+      if (wasReconnect) {
+        this.reconnectCallbacks.forEach((cb) => cb());
+      }
     };
 
     this.ws.onmessage = (event) => {
@@ -113,6 +118,13 @@ class WebSocketManager {
 
   getStatus(): ConnectionStatus {
     return this._status;
+  }
+
+  onReconnect(callback: () => void): () => void {
+    this.reconnectCallbacks.add(callback);
+    return () => {
+      this.reconnectCallbacks.delete(callback);
+    };
   }
 
   private setStatus(status: ConnectionStatus): void {

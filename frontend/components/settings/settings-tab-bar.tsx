@@ -1,14 +1,15 @@
 "use client";
 
-import { Terminal, Key, Plug, FileText, Github } from "lucide-react";
+import { Terminal, Key, Plug, FileText, Github, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { SettingsSection } from "./settings-sidebar";
 
 const TABS = [
   { id: "claude-md" as const, label: "CLAUDE.md", icon: FileText },
   { id: "commands" as const, label: "Commands", icon: Terminal },
-  { id: "api-keys" as const, label: "Keys", icon: Key },
+  { id: "credentials" as const, label: "Credentials", icon: Key },
   { id: "mcps" as const, label: "MCPs", icon: Plug },
+  { id: "approvals" as const, label: "Approvals", icon: Shield },
   { id: "github" as const, label: "GitHub", icon: Github },
 ];
 

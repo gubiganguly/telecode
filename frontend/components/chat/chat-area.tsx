@@ -17,10 +17,18 @@ interface ChatAreaProps {
   onCancel: () => void;
   onOpenSidebar: () => void;
   onToggleFileTree: () => void;
+  onTogglePreview: () => void;
   projectName: string;
   sessionName: string;
   showMenuButton: boolean;
   fileTreeOpen: boolean;
+  previewOpen: boolean;
+  previewSupported: boolean;
+  previewRunning: boolean;
+  previewStarting: boolean;
+  previewStopping: boolean;
+  onStartPreview: () => void;
+  onStopPreview: () => void;
 }
 
 export function ChatArea({
@@ -33,10 +41,18 @@ export function ChatArea({
   onCancel,
   onOpenSidebar,
   onToggleFileTree,
+  onTogglePreview,
   projectName,
   sessionName,
   showMenuButton,
   fileTreeOpen,
+  previewOpen,
+  previewSupported,
+  previewRunning,
+  previewStarting,
+  previewStopping,
+  onStartPreview,
+  onStopPreview,
 }: ChatAreaProps) {
   return (
     <div className="flex flex-col flex-1 h-full min-w-0">
@@ -45,8 +61,16 @@ export function ChatArea({
         sessionName={sessionName}
         onOpenSidebar={onOpenSidebar}
         onToggleFileTree={onToggleFileTree}
+        onTogglePreview={onTogglePreview}
         showMenuButton={showMenuButton}
         fileTreeOpen={fileTreeOpen}
+        previewOpen={previewOpen}
+        previewSupported={previewSupported}
+        previewRunning={previewRunning}
+        previewStarting={previewStarting}
+        previewStopping={previewStopping}
+        onStartPreview={onStartPreview}
+        onStopPreview={onStopPreview}
       />
 
       {messages.length === 0 && !isStreaming ? (

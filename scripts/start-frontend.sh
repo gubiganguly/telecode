@@ -25,13 +25,12 @@ STALE=$(lsof -ti:3000 2>/dev/null || true)
 
 cd "$REPO_DIR/frontend"
 
-# Build if .next doesn't exist or --rebuild was passed
-if [ ! -d ".next" ] || [ "$1" = "--rebuild" ]; then
-  npm run build >> "$LOG_DIR/frontend-build.log" 2>&1
-  if [ $? -ne 0 ]; then
-    echo "$(date '+%Y-%m-%d %H:%M:%S') Frontend build failed" >> "$LOG_DIR/monitor.log"
-    exit 1
-  fi
+# Always clean and rebuild to avoid stale .next artifacts
+rm -rf .next
+npm run build >> "$LOG_DIR/frontend-build.log" 2>&1
+if [ $? -ne 0 ]; then
+  echo "$(date '+%Y-%m-%d %H:%M:%S') Frontend build failed" >> "$LOG_DIR/monitor.log"
+  exit 1
 fi
 
 npm start >> "$LOG_DIR/frontend.log" 2>&1 &

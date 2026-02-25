@@ -1,23 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Zap, Terminal, Key, Plug, FileText, Github } from "lucide-react";
+import { ArrowLeft, Zap, Terminal, Key, Plug, FileText, Github, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type SettingsSection = "commands" | "api-keys" | "mcps" | "claude-md" | "github";
+export type SettingsSection = "commands" | "credentials" | "mcps" | "claude-md" | "github" | "approvals";
 
 const SECTIONS = [
   { id: "claude-md" as const, label: "CLAUDE.md", icon: FileText },
   { id: "commands" as const, label: "Slash Commands", icon: Terminal },
-  { id: "api-keys" as const, label: "API Keys", icon: Key },
+  { id: "credentials" as const, label: "Credentials", icon: Key },
   { id: "mcps" as const, label: "Connected MCPs", icon: Plug },
+  { id: "approvals" as const, label: "Tool Approvals", icon: Shield },
   { id: "github" as const, label: "GitHub", icon: Github },
 ];
 
 interface SettingsSidebarProps {
   activeSection: SettingsSection;
   onSelectSection: (section: SettingsSection) => void;
-  counts: { commands: number; keys: number; mcps: number };
+  counts: { commands: number; credentials: number; mcps: number };
 }
 
 export function SettingsSidebar({
@@ -28,8 +29,9 @@ export function SettingsSidebar({
   const countMap: Record<SettingsSection, number> = {
     "claude-md": 0,
     commands: counts.commands,
-    "api-keys": counts.keys,
+    credentials: counts.credentials,
     mcps: counts.mcps,
+    approvals: 0,
     github: 0,
   };
 

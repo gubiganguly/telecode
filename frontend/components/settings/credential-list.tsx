@@ -8,16 +8,16 @@ import { Dialog, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime } from "@/lib/utils";
 import { api } from "@/lib/api";
-import type { ApiKeyInfo } from "@/types/api";
+import type { CredentialInfo } from "@/types/api";
 
-interface ApiKeyListProps {
-  keys: ApiKeyInfo[];
-  onEdit: (key: ApiKeyInfo) => void;
+interface CredentialListProps {
+  credentials: CredentialInfo[];
+  onEdit: (credential: CredentialInfo) => void;
   onDelete: (id: string) => Promise<void>;
 }
 
-export function ApiKeyList({ keys, onEdit, onDelete }: ApiKeyListProps) {
-  const [deleteTarget, setDeleteTarget] = useState<ApiKeyInfo | null>(null);
+export function CredentialList({ credentials, onEdit, onDelete }: CredentialListProps) {
+  const [deleteTarget, setDeleteTarget] = useState<CredentialInfo | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [revealedKeys, setRevealedKeys] = useState<Record<string, string>>({});
@@ -35,48 +35,48 @@ export function ApiKeyList({ keys, onEdit, onDelete }: ApiKeyListProps) {
     }
   };
 
-  const handleCopyEnvVar = async (key: ApiKeyInfo) => {
-    await navigator.clipboard.writeText(key.env_var);
-    setCopiedId(key.id);
+  const handleCopyEnvVar = async (credential: CredentialInfo) => {
+    await navigator.clipboard.writeText(credential.env_var);
+    setCopiedId(credential.id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleToggleReveal = async (key: ApiKeyInfo) => {
-    if (revealedKeys[key.id]) {
+  const handleToggleReveal = async (credential: CredentialInfo) => {
+    if (revealedKeys[credential.id]) {
       setRevealedKeys((prev) => {
         const next = { ...prev };
-        delete next[key.id];
+        delete next[credential.id];
         return next;
       });
       return;
     }
 
-    setLoadingReveal(key.id);
+    setLoadingReveal(credential.id);
     try {
-      const { value } = await api.getApiKeyValue(key.id);
-      setRevealedKeys((prev) => ({ ...prev, [key.id]: value }));
+      const { value } = await api.getCredentialValue(credential.id);
+      setRevealedKeys((prev) => ({ ...prev, [credential.id]: value }));
     } finally {
       setLoadingReveal(null);
     }
   };
 
-  const handleCopyValue = async (key: ApiKeyInfo) => {
-    let value = revealedKeys[key.id];
+  const handleCopyValue = async (credential: CredentialInfo) => {
+    let value = revealedKeys[credential.id];
     if (!value) {
-      const res = await api.getApiKeyValue(key.id);
+      const res = await api.getCredentialValue(credential.id);
       value = res.value;
     }
     await navigator.clipboard.writeText(value);
-    setCopiedValueId(key.id);
+    setCopiedValueId(credential.id);
     setTimeout(() => setCopiedValueId(null), 2000);
   };
 
   return (
     <>
       <div className="space-y-3">
-        {keys.map((key, i) => (
+        {credentials.map((credential, i) => (
           <motion.div
-            key={key.id}
+            key={credential.id}
             className="group rounded-xl border border-border bg-bg-secondary p-4 transition-colors hover:border-border-focus/50"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -89,18 +89,18 @@ export function ApiKeyList({ keys, onEdit, onDelete }: ApiKeyListProps) {
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-sm font-medium text-text-primary truncate">
-                    {key.name}
+                    {credential.name}
                   </h3>
                   <div className="flex items-center gap-2 mt-0.5">
                     <Badge variant="default" className="text-xs">
-                      {key.service}
+                      {credential.service}
                     </Badge>
                     <button
-                      onClick={() => handleCopyEnvVar(key)}
+                      onClick={() => handleCopyEnvVar(credential)}
                       className="flex items-center gap-1 text-xs font-mono text-text-tertiary hover:text-text-secondary transition-colors cursor-pointer"
                     >
-                      {key.env_var}
-                      {copiedId === key.id ? (
+                      {credential.env_var}
+                      {copiedId === credential.id ? (
                         <Check size={11} className="text-green-500" />
                       ) : (
                         <Copy size={11} />
@@ -114,14 +114,14 @@ export function ApiKeyList({ keys, onEdit, onDelete }: ApiKeyListProps) {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => onEdit(key)}
+                  onClick={() => onEdit(credential)}
                 >
                   <Pencil size={14} />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => setDeleteTarget(key)}
+                  onClick={() => setDeleteTarget(credential)}
                   className="text-text-secondary hover:text-error"
                 >
                   <Trash2 size={14} />
@@ -132,27 +132,27 @@ export function ApiKeyList({ keys, onEdit, onDelete }: ApiKeyListProps) {
             <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-border/50">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-xs font-mono text-text-tertiary truncate min-w-0">
-                  {revealedKeys[key.id] || key.masked_value}
+                  {revealedKeys[credential.id] || credential.masked_value}
                 </span>
                 <div className="flex items-center gap-0.5 shrink-0">
                   <button
-                    onClick={() => handleToggleReveal(key)}
-                    disabled={loadingReveal === key.id}
+                    onClick={() => handleToggleReveal(credential)}
+                    disabled={loadingReveal === credential.id}
                     className="p-1 rounded text-text-tertiary hover:text-text-secondary transition-colors cursor-pointer disabled:opacity-50"
-                    title={revealedKeys[key.id] ? "Hide value" : "Reveal value"}
+                    title={revealedKeys[credential.id] ? "Hide value" : "Reveal value"}
                   >
-                    {revealedKeys[key.id] ? (
+                    {revealedKeys[credential.id] ? (
                       <EyeOff size={13} />
                     ) : (
                       <Eye size={13} />
                     )}
                   </button>
                   <button
-                    onClick={() => handleCopyValue(key)}
+                    onClick={() => handleCopyValue(credential)}
                     className="p-1 rounded text-text-tertiary hover:text-text-secondary transition-colors cursor-pointer"
                     title="Copy value"
                   >
-                    {copiedValueId === key.id ? (
+                    {copiedValueId === credential.id ? (
                       <Check size={13} className="text-green-500" />
                     ) : (
                       <Copy size={13} />
@@ -161,7 +161,7 @@ export function ApiKeyList({ keys, onEdit, onDelete }: ApiKeyListProps) {
                 </div>
               </div>
               <span className="text-xs text-text-tertiary shrink-0">
-                {formatRelativeTime(key.created_at)}
+                {formatRelativeTime(credential.created_at)}
               </span>
             </div>
           </motion.div>
@@ -173,7 +173,7 @@ export function ApiKeyList({ keys, onEdit, onDelete }: ApiKeyListProps) {
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
       >
-        <DialogTitle>Delete API Key</DialogTitle>
+        <DialogTitle>Delete Credential</DialogTitle>
         <p className="text-sm text-text-secondary mb-2">
           Are you sure you want to delete{" "}
           <strong className="text-text-primary">{deleteTarget?.name}</strong>?
@@ -200,7 +200,7 @@ export function ApiKeyList({ keys, onEdit, onDelete }: ApiKeyListProps) {
             disabled={deleting}
             className="flex-1"
           >
-            {deleting ? "Deleting..." : "Delete Key"}
+            {deleting ? "Deleting..." : "Delete Credential"}
           </Button>
         </div>
       </Dialog>

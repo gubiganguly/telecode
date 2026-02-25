@@ -1,6 +1,6 @@
 #!/bin/bash
 # CasperBot Process Monitor
-# Checks all 3 processes every 5 seconds, restarts any that are down.
+# Checks all 4 processes every 5 seconds, restarts any that are down.
 # Designed to be run by launchd with KeepAlive: true.
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -28,6 +28,7 @@ set +a
 BACKEND_FAILURES=0
 FRONTEND_FAILURES=0
 TUNNEL_FAILURES=0
+CADDY_FAILURES=0
 MAX_FAILURES=10
 LOOP_COUNT=0
 
@@ -38,6 +39,7 @@ log "Initial startup: launching all processes"
 "$SCRIPTS_DIR/start-backend.sh"
 "$SCRIPTS_DIR/start-frontend.sh"
 "$SCRIPTS_DIR/start-tunnel.sh"
+"$SCRIPTS_DIR/start-caddy.sh"
 log "Initial startup complete"
 
 # Trap SIGTERM for clean shutdown
@@ -116,6 +118,25 @@ while true; do
     elif [ "$((TUNNEL_FAILURES % 60))" -eq 0 ]; then
       log "Tunnel DOWN (extended backoff, attempt $TUNNEL_FAILURES) — retrying"
       "$SCRIPTS_DIR/start-tunnel.sh"
+    fi
+  fi
+
+  # --- Caddy check (live preview reverse proxy) ---
+  CADDY_ALIVE=false
+  CADDY_PID_FILE="$LOG_DIR/.pid.caddy"
+  if [ -f "$CADDY_PID_FILE" ] && kill -0 "$(cat "$CADDY_PID_FILE")" 2>/dev/null; then
+    CADDY_ALIVE=true
+    CADDY_FAILURES=0
+  fi
+
+  if [ "$CADDY_ALIVE" = false ]; then
+    CADDY_FAILURES=$((CADDY_FAILURES + 1))
+    if [ "$CADDY_FAILURES" -le "$MAX_FAILURES" ]; then
+      log "Caddy DOWN (attempt $CADDY_FAILURES/$MAX_FAILURES) — restarting"
+      "$SCRIPTS_DIR/start-caddy.sh"
+    elif [ "$((CADDY_FAILURES % 60))" -eq 0 ]; then
+      log "Caddy DOWN (extended backoff, attempt $CADDY_FAILURES) — retrying"
+      "$SCRIPTS_DIR/start-caddy.sh"
     fi
   fi
 done

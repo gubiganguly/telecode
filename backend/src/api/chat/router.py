@@ -8,13 +8,12 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from ...core.exceptions import ProjectNotFoundError, SessionNotFoundError
 from ...core.security import authenticate_websocket
 from ...schemas.chat import ChatMessageType
-from ...services.api_keys.api_key_service import ApiKeyService
+from ...services.credentials.credential_service import CredentialService
 from ...services.chat.title_generator import generate_title
-from ...services.claude.process_manager import ProcessManager
-from ...services.claude.stream_parser import ParsedEvent
 from ...services.projects.project_service import ProjectService
 from ...services.sessions.session_service import SessionService
 from ...services.messages.message_service import MessageService
+from ...services.tasks.task_manager import TaskManager
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(default="")):
     """WebSocket endpoint for bidirectional chat with Claude.
 
     Protocol:
-    - Client sends JSON: send_message, cancel, or ping
+    - Client sends JSON: send_message, cancel, subscribe, unsubscribe, or ping
     - Server sends JSON events: text_delta, thinking_delta, tool_use_start, etc.
     """
     if not await authenticate_websocket(token):
@@ -36,13 +35,11 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(default="")):
 
     await websocket.accept()
 
-    process_manager: ProcessManager = websocket.app.state.process_manager
+    task_manager: TaskManager = websocket.app.state.task_manager
     session_service: SessionService = websocket.app.state.session_service
     project_service: ProjectService = websocket.app.state.project_service
-    api_key_service: ApiKeyService = websocket.app.state.api_key_service
+    credential_service: CredentialService = websocket.app.state.credential_service
     message_service: MessageService = websocket.app.state.message_service
-
-    running_tasks: dict[str, asyncio.Task] = {}
 
     try:
         while True:
@@ -59,30 +56,54 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(default="")):
             if msg_type == ChatMessageType.PING:
                 await websocket.send_json({"type": "pong"})
 
+            elif msg_type == ChatMessageType.SUBSCRIBE:
+                session_id = data.get("session_id")
+                if not session_id:
+                    continue
+                subscribed = await task_manager.subscribe(session_id, websocket)
+                if subscribed:
+                    replay = task_manager.get_replay(session_id)
+                    if replay:
+                        events, is_complete = replay
+                        await websocket.send_json({
+                            "type": "task_replay",
+                            "session_id": session_id,
+                            "events": events,
+                            "is_complete": is_complete,
+                        })
+
+            elif msg_type == ChatMessageType.UNSUBSCRIBE:
+                session_id = data.get("session_id")
+                if session_id:
+                    await task_manager.unsubscribe(session_id, websocket)
+
             elif msg_type == ChatMessageType.CANCEL:
                 session_id = data.get("session_id")
                 if session_id:
-                    cancelled = await process_manager.cancel(session_id)
-                    if cancelled:
-                        await websocket.send_json(
-                            {"type": "cancelled", "session_id": session_id}
-                        )
-                    task = running_tasks.pop(session_id, None)
-                    if task:
-                        task.cancel()
+                    await task_manager.cancel_task(session_id)
+                    # cancelled event is broadcast by task_manager to all subscribers
 
             elif msg_type == ChatMessageType.SEND_MESSAGE:
                 session_id = data.get("session_id", "")
                 project_id = data.get("project_id", "")
                 message = data.get("message", "")
 
+                logger.info(
+                    "send_message: project_id=%s session_id=%s msg_len=%d",
+                    project_id, session_id, len(message),
+                )
+
                 if not message or not session_id or not project_id:
+                    logger.warning(
+                        "send_message missing fields: message=%s session_id=%s project_id=%s",
+                        bool(message), bool(session_id), bool(project_id),
+                    )
                     await _send_error(
                         websocket, session_id, "Missing required fields"
                     )
                     continue
 
-                if process_manager.is_session_busy(session_id):
+                if task_manager.is_task_running(session_id):
                     await _send_error(
                         websocket,
                         session_id,
@@ -95,6 +116,9 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(default="")):
                     project = await project_service.get_project(project_id)
                     project_path = Path(project["path"])
                 except ProjectNotFoundError:
+                    logger.warning(
+                        "Project not found in DB: project_id=%s", project_id
+                    )
                     await _send_error(
                         websocket, session_id, "Project not found"
                     )
@@ -124,9 +148,10 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(default="")):
                     if existing.get("message_count", 0) == 0:
                         asyncio.create_task(
                             _generate_session_title(
+                                task_manager=task_manager,
                                 websocket=websocket,
                                 session_service=session_service,
-                                api_key_service=api_key_service,
+                                credential_service=credential_service,
                                 session_id=session_id,
                                 message=message,
                             )
@@ -161,9 +186,10 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(default="")):
                         # Generate a smart title in the background
                         asyncio.create_task(
                             _generate_session_title(
+                                task_manager=task_manager,
                                 websocket=websocket,
                                 session_service=session_service,
-                                api_key_service=api_key_service,
+                                credential_service=credential_service,
                                 session_id=session_id,
                                 message=message,
                             )
@@ -177,12 +203,9 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(default="")):
                 except Exception:
                     logger.warning("Failed to persist user message for session %s", session_id, exc_info=True)
 
-                # Stream in a background task
-                task = asyncio.create_task(
-                    _stream_response(
-                        websocket=websocket,
-                        process_manager=process_manager,
-                        message_service=message_service,
+                # Start background task (decoupled from this WebSocket)
+                try:
+                    await task_manager.start_task(
                         session_id=session_id,
                         project_id=project_id,
                         project_path=project_path,
@@ -191,8 +214,10 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(default="")):
                         model=data.get("model"),
                         max_budget_usd=data.get("max_budget_usd"),
                     )
-                )
-                running_tasks[session_id] = task
+                    # Auto-subscribe the sender to the task
+                    await task_manager.subscribe(session_id, websocket)
+                except RuntimeError as e:
+                    await _send_error(websocket, session_id, str(e))
 
             else:
                 await _send_error(
@@ -202,183 +227,38 @@ async def chat_websocket(websocket: WebSocket, token: str = Query(default="")):
     except WebSocketDisconnect:
         pass
     finally:
-        for session_id, task in running_tasks.items():
-            task.cancel()
-            await process_manager.cancel(session_id)
-
-
-async def _stream_response(
-    websocket: WebSocket,
-    process_manager: ProcessManager,
-    message_service: MessageService,
-    session_id: str,
-    project_id: str,
-    project_path: Path,
-    message: str,
-    is_continuation: bool,
-    model: str | None,
-    max_budget_usd: float | None,
-) -> None:
-    """Background task: streams Claude's response events to the WebSocket."""
-    # Accumulators for persisting the assistant message
-    full_content = ""
-    full_thinking = ""
-    tool_uses_acc: list[dict] = []
-    final_usage = None
-    final_cost = None
-
-    async def _persist_assistant():
-        if full_content or full_thinking or tool_uses_acc:
-            try:
-                await message_service.save_message(
-                    session_id=session_id,
-                    role="assistant",
-                    content=full_content,
-                    thinking=full_thinking,
-                    tool_uses=tool_uses_acc,
-                    usage=final_usage,
-                    cost_usd=final_cost,
-                )
-            except Exception:
-                logger.warning(
-                    "Failed to persist assistant message for session %s",
-                    session_id,
-                    exc_info=True,
-                )
-
-    try:
-        await websocket.send_json(
-            {"type": "message_start", "session_id": session_id}
-        )
-
-        async for event in process_manager.run_prompt(
-            session_id=session_id,
-            project_id=project_id,
-            project_path=project_path,
-            message=message,
-            is_continuation=is_continuation,
-            model=model,
-            max_budget_usd=max_budget_usd,
-        ):
-            outbound = _event_to_json(event)
-            if outbound:
-                await websocket.send_json(outbound)
-
-            # Accumulate content for persistence
-            if event.type == "text_delta":
-                full_content += event.data.get("text", "")
-            elif event.type == "thinking_delta":
-                full_thinking += event.data.get("thinking", "")
-            elif event.type == "tool_use_start":
-                tool_uses_acc.append({
-                    "toolId": event.data.get("tool_id", ""),
-                    "toolName": event.data.get("tool_name", ""),
-                    "input": event.data.get("input", {}),
-                    "isComplete": False,
-                })
-            elif event.type == "tool_result":
-                tool_id = event.data.get("tool_id", "")
-                for tu in tool_uses_acc:
-                    if tu["toolId"] == tool_id:
-                        tu["output"] = event.data.get("output", "")
-                        tu["isError"] = event.data.get("is_error", False)
-                        tu["isComplete"] = True
-                        break
-            elif event.type == "message_complete":
-                final_usage = event.data.get("usage")
-                final_cost = event.data.get("cost_usd")
-
-            # When AskUserQuestion is detected, stop streaming and wait for user input.
-            # The CLI blocks on stdin (PIPE) waiting for an answer it won't get,
-            # so we kill the process and let the user's answer trigger a new --resume.
-            if (
-                event.type == "tool_use_start"
-                and event.data.get("tool_name") == "AskUserQuestion"
-            ):
-                await process_manager.cancel(session_id)
-                await _persist_assistant()
-                await websocket.send_json(
-                    {"type": "input_required", "session_id": session_id}
-                )
-                return
-
-        # Stream completed successfully — persist
-        await _persist_assistant()
-
-    except asyncio.CancelledError:
-        pass
-    except Exception as e:
-        logger.exception("Streaming error for session %s", session_id)
-        try:
-            await _send_error(
-                websocket,
-                session_id,
-                "Something went wrong processing your message. Please try again.",
-            )
-        except Exception:
-            pass  # WebSocket may already be closed
-    finally:
-        # Ensure the process is cleaned up even if the generator was
-        # interrupted mid-stream (e.g. WebSocket send failure). Without
-        # this, the async generator's finally block may never execute and
-        # the session stays permanently "busy".
-        if process_manager.is_session_busy(session_id):
-            logger.warning(
-                "Force-cleaning busy session %s after stream ended", session_id
-            )
-            await process_manager.cancel(session_id)
-
-
-def _event_to_json(event: ParsedEvent) -> dict | None:
-    """Convert a ParsedEvent to a JSON-serializable dict for the frontend."""
-    base = {"type": event.type, "session_id": event.session_id}
-
-    if event.type == "text_delta":
-        base["text"] = event.data.get("text", "")
-    elif event.type == "thinking_delta":
-        base["thinking"] = event.data.get("thinking", "")
-    elif event.type == "tool_use_start":
-        base["tool_name"] = event.data.get("tool_name", "")
-        base["tool_id"] = event.data.get("tool_id", "")
-        base["input"] = event.data.get("input", {})
-    elif event.type == "tool_result":
-        base["tool_id"] = event.data.get("tool_id", "")
-        base["output"] = event.data.get("output", "")
-        base["is_error"] = event.data.get("is_error", False)
-    elif event.type == "message_complete":
-        base["result_text"] = event.data.get("result_text", "")
-        base["usage"] = event.data.get("usage")
-        base["cost_usd"] = event.data.get("cost_usd")
-    elif event.type == "error":
-        base["error"] = event.data.get("error", "Unknown error")
-        base["code"] = event.data.get("code")
-    else:
-        base.update(event.data)
-
-    return base
+        # CRITICAL: don't cancel tasks — just unsubscribe this WebSocket.
+        # Tasks keep running in the background.
+        await task_manager.unsubscribe_all(websocket)
 
 
 async def _generate_session_title(
+    task_manager: TaskManager,
     websocket: WebSocket,
     session_service: SessionService,
-    api_key_service: ApiKeyService,
+    credential_service: CredentialService,
     session_id: str,
     message: str,
 ) -> None:
     """Background task: generates a short AI title and pushes it to the client."""
     try:
-        title = await generate_title(message, api_key_service)
+        title = await generate_title(message, credential_service)
         if not title:
             return
 
         await session_service.update_session(session_id, name=title)
-        await websocket.send_json(
-            {
-                "type": "session_renamed",
-                "session_id": session_id,
-                "name": title,
-            }
-        )
+        event = {
+            "type": "session_renamed",
+            "session_id": session_id,
+            "name": title,
+        }
+        # Broadcast to all subscribers of this task (if task exists)
+        await task_manager.broadcast_to_task(session_id, event)
+        # Also send directly to this websocket in case it's not subscribed yet
+        try:
+            await websocket.send_json(event)
+        except Exception:
+            pass  # WebSocket may be closed
     except Exception:
         logger.debug("Title generation failed for session %s", session_id, exc_info=True)
 

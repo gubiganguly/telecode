@@ -13,9 +13,7 @@ interface SpeechRecognitionEvent extends Event {
   resultIndex: number;
 }
 
-type SpeechRecognitionInstance = InstanceType<
-  typeof globalThis.SpeechRecognition
-> & {
+interface SpeechRecognitionInstance {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
@@ -25,7 +23,7 @@ type SpeechRecognitionInstance = InstanceType<
   onresult: ((event: SpeechRecognitionEvent) => void) | null;
   onend: (() => void) | null;
   onerror: ((event: Event & { error: string }) => void) | null;
-};
+}
 
 function getSpeechRecognition(): (new () => SpeechRecognitionInstance) | null {
   if (typeof window === "undefined") return null;

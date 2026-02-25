@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request
 
 from ...schemas.common import APIResponse
-from ...schemas.mcps import McpInstallRequest, McpInstallResponse, McpListResponse
+from ...schemas.mcps import McpCredentialInstall, McpInstallRequest, McpInstallResponse, McpListResponse
 
 router = APIRouter(prefix="/api/mcps", tags=["mcps"])
 
@@ -16,9 +16,22 @@ async def list_mcps(request: Request):
 @router.post("/install", response_model=APIResponse[McpInstallResponse])
 async def install_mcp(body: McpInstallRequest, request: Request):
     service = request.app.state.mcp_service
-    api_key_service = request.app.state.api_key_service
+    credential_service = request.app.state.credential_service
     result = await service.install_mcp(
         query=body.query,
-        api_key_service=api_key_service,
+        credential_service=credential_service,
     )
     return APIResponse(data=McpInstallResponse(**result))
+
+
+@router.post("/install-credential", response_model=APIResponse[None], status_code=201)
+async def install_mcp_credential(body: McpCredentialInstall, request: Request):
+    """Save a credential required by an MCP server."""
+    credential_service = request.app.state.credential_service
+    await credential_service.create_key(
+        name=body.name,
+        service=body.service,
+        env_var=body.env_var,
+        value=body.value,
+    )
+    return APIResponse(data=None)

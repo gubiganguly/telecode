@@ -125,9 +125,9 @@ export function SessionItem({
         )}
       </div>
 
-      {/* Action buttons - visible on hover */}
+      {/* Action buttons - always visible on mobile, hover-reveal on desktop */}
       {!editing && (
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
           <button
             className="p-1 rounded hover:bg-bg-secondary text-text-tertiary hover:text-text-primary cursor-pointer"
             onClick={(e) => {

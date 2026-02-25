@@ -51,10 +51,10 @@ async def delete_command(name: str, request: Request):
 @router.post("/generate", response_model=APIResponse[CommandGenerateResponse])
 async def generate_command(body: CommandGenerateRequest, request: Request):
     service = request.app.state.command_service
-    api_key_service = request.app.state.api_key_service
+    credential_service = request.app.state.credential_service
     content = await service.generate_command(
         name=body.name,
         description=body.description,
-        api_key_service=api_key_service,
+        credential_service=credential_service,
     )
     return APIResponse(data=CommandGenerateResponse(content=content))

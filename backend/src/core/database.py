@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);
 
-CREATE TABLE IF NOT EXISTS api_keys (
+CREATE TABLE IF NOT EXISTS credentials (
     id              TEXT PRIMARY KEY,
     name            TEXT NOT NULL,
     service         TEXT NOT NULL,
@@ -107,6 +107,85 @@ class Database:
             await self._connection.commit()
         except Exception:
             pass  # Column already exists
+
+        # Migration: add approvals_enabled column to projects if missing
+        # NULL = inherit from global setting, 0 = force off, 1 = force on
+        try:
+            await self._connection.execute(
+                "ALTER TABLE projects ADD COLUMN approvals_enabled INTEGER DEFAULT NULL"
+            )
+            await self._connection.commit()
+        except Exception:
+            pass  # Column already exists
+
+        # Migration: reset approvals_enabled=0 to NULL (inherit global)
+        # so existing projects follow the global default
+        try:
+            await self._connection.execute(
+                "UPDATE projects SET approvals_enabled = NULL WHERE approvals_enabled = 0"
+            )
+            await self._connection.commit()
+        except Exception:
+            pass
+
+        # Migration: create settings table for global app settings
+        await self._connection.executescript("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+        """)
+        await self._connection.commit()
+
+        # Migration: rename api_keys table to credentials
+        try:
+            await self._connection.execute(
+                "ALTER TABLE api_keys RENAME TO credentials"
+            )
+            await self._connection.commit()
+        except Exception:
+            pass  # Table already renamed or doesn't exist
+
+        # Migration: create project_env_vars table for project-scoped env variables
+        await self._connection.executescript("""
+            CREATE TABLE IF NOT EXISTS project_env_vars (
+                id              TEXT PRIMARY KEY,
+                project_id      TEXT NOT NULL,
+                name            TEXT NOT NULL,
+                env_var         TEXT NOT NULL,
+                encrypted_value TEXT NOT NULL,
+                created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                UNIQUE(project_id, env_var)
+            );
+        """)
+        await self._connection.commit()
+
+        # Migration: create project_excluded_credentials table
+        await self._connection.executescript("""
+            CREATE TABLE IF NOT EXISTS project_excluded_credentials (
+                id          TEXT PRIMARY KEY,
+                project_id  TEXT NOT NULL,
+                env_var     TEXT NOT NULL,
+                created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                UNIQUE(project_id, env_var)
+            );
+        """)
+        await self._connection.commit()
+
+        # Migration: create previews table for live preview port allocations
+        await self._connection.executescript("""
+            CREATE TABLE IF NOT EXISTS previews (
+                project_id  TEXT PRIMARY KEY,
+                port        INTEGER NOT NULL UNIQUE,
+                framework   TEXT NOT NULL,
+                start_cmd   TEXT NOT NULL,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+            );
+        """)
+        await self._connection.commit()
 
     async def disconnect(self) -> None:
         if self._connection:

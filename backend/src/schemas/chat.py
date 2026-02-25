@@ -11,6 +11,8 @@ class ChatMessageType(str, Enum):
     SEND_MESSAGE = "send_message"
     CANCEL = "cancel"
     PING = "ping"
+    SUBSCRIBE = "subscribe"
+    UNSUBSCRIBE = "unsubscribe"
 
 
 class SendMessagePayload(BaseModel):

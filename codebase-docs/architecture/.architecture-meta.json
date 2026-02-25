@@ -1,8 +1,8 @@
 {
   "last_full_scan": "2026-02-23T00:00:00Z",
-  "last_updated": "2026-02-23T00:00:00Z",
-  "scan_type": "full",
-  "git_hash": "6bb6907",
+  "last_updated": "2026-02-24T12:00:00Z",
+  "scan_type": "incremental",
+  "git_hash": "563dc98",
   "features_documented": [
     "authentication",
     "chat-websocket",
@@ -10,10 +10,27 @@
     "mentions",
     "github-integration",
     "deployment",
-    "api-keys",
+    "credentials",
+    "credential-exclusion",
+    "project-settings",
+    "project-env-vars",
+    "tool-approvals",
+    "mcp-auto-credential-detection",
     "commands",
     "mcps",
     "file-tree",
-    "claude-md"
+    "claude-md",
+    "message-persistence",
+    "speech-recognition",
+    "cancel-resilience",
+    "ask-user-question",
+    "elapsed-time",
+    "system-context-injection",
+    "help-pages",
+    "background-tasks",
+    "browser-notifications",
+    "plan-mode-ui",
+    "install-script",
+    "active-tasks-indicator"
   ]
 }

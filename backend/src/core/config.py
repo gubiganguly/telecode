@@ -28,7 +28,11 @@ class Settings(BaseSettings):
     default_model: str = "sonnet"
     max_budget_usd: float = 5.0
     fallback_model: str = "haiku"
-    process_timeout_seconds: int = 600
+    process_timeout_seconds: int = 1200
+
+    # Background tasks
+    max_concurrent_tasks: int = 5
+    task_buffer_ttl_seconds: int = 3600  # 1 hour — keep completed buffers for replay
 
     # Auth
     auth_enabled: bool = True
@@ -45,6 +49,14 @@ class Settings(BaseSettings):
 
     # CORS — plain string, parsed into a list by get_cors_origins()
     cors_origins: str = "http://localhost:3000,http://localhost:3001"
+
+    # Live preview
+    preview_port_start: int = 4000
+    preview_port_end: int = 4999
+    preview_caddy_admin_url: str = "http://localhost:2019"
+    preview_domain: str = "casperbot.net"
+    preview_caddy_listen_port: int = 9000
+    preview_auto_stop_minutes: int = 60
 
     def get_cors_origins(self) -> list[str]:
         v = self.cors_origins.strip()

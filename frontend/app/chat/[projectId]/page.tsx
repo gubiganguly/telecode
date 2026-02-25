@@ -5,11 +5,14 @@ import { v4 as uuidv4 } from "uuid";
 import { SessionSidebar } from "@/components/sessions/session-sidebar";
 import { ChatArea } from "@/components/chat/chat-area";
 import { FileTreePanel } from "@/components/files/file-tree-panel";
+import { PreviewPanel } from "@/components/preview/preview-panel";
+import { ProjectSettingsDrawer } from "@/components/project-settings/project-settings-drawer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useStore } from "@/lib/store";
 import { useSessions } from "@/hooks/use-sessions";
 import { useChat } from "@/hooks/use-chat";
 import { useFileTree } from "@/hooks/use-file-tree";
+import { usePreview } from "@/hooks/use-preview";
 import { useMobile } from "@/hooks/use-mobile";
 import {
   useMentionResolver,
@@ -18,6 +21,7 @@ import {
 import type { MentionItem } from "@/types/mentions";
 
 const FILE_TREE_STORAGE_KEY = "casperbot-file-tree-open";
+const PREVIEW_PANEL_STORAGE_KEY = "casperbot-preview-panel-open";
 
 export default function ChatPage({
   params,
@@ -28,11 +32,15 @@ export default function ChatPage({
   const isMobile = useMobile();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [fileTreeOpen, setFileTreeOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Sync file tree state from localStorage after mount to avoid hydration mismatch
+  // Sync panel state from localStorage after mount to avoid hydration mismatch
   useEffect(() => {
-    const stored = localStorage.getItem(FILE_TREE_STORAGE_KEY);
-    if (stored === "true") setFileTreeOpen(true);
+    const storedFileTree = localStorage.getItem(FILE_TREE_STORAGE_KEY);
+    if (storedFileTree === "true") setFileTreeOpen(true);
+    const storedPreview = localStorage.getItem(PREVIEW_PANEL_STORAGE_KEY);
+    if (storedPreview === "true") setPreviewOpen(true);
   }, []);
 
   const currentProject = useStore((s) => s.currentProject);
@@ -58,6 +66,19 @@ export default function ChatPage({
 
   const { tree, loading: treeLoading, error: treeError, refresh: refreshTree } =
     useFileTree(projectId, fileTreeOpen);
+
+  const {
+    preview,
+    logs: previewLogs,
+    starting: previewStarting,
+    stopping: previewStopping,
+    error: previewError,
+    isRunning: previewRunning,
+    start: startPreview,
+    stop: stopPreview,
+  } = usePreview(projectId);
+
+  const previewSupported = currentProject?.preview?.supported ?? false;
 
   // Fetch project info
   useEffect(() => {
@@ -127,6 +148,20 @@ export default function ChatPage({
     });
   }, []);
 
+  const togglePreview = useCallback(() => {
+    setPreviewOpen((prev) => {
+      const next = !prev;
+      localStorage.setItem(PREVIEW_PANEL_STORAGE_KEY, String(next));
+      return next;
+    });
+  }, []);
+
+  const handleStartPreview = useCallback(async () => {
+    setPreviewOpen(true);
+    localStorage.setItem(PREVIEW_PANEL_STORAGE_KEY, "true");
+    await startPreview();
+  }, [startPreview]);
+
   const projectName = currentProject?.name || "Loading...";
   const sessionName =
     sessions.find((s) => s.id === activeSessionId)?.name || "New Chat";
@@ -158,6 +193,7 @@ export default function ChatPage({
         projectName={projectName}
         streamingSessions={allStreaming}
         waitingSessions={allWaitingForInput}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       <ChatArea
@@ -170,10 +206,31 @@ export default function ChatPage({
         onCancel={handleCancel}
         onOpenSidebar={() => setSidebarOpen(true)}
         onToggleFileTree={toggleFileTree}
+        onTogglePreview={togglePreview}
         projectName={projectName}
         sessionName={sessionName}
         showMenuButton={isMobile}
         fileTreeOpen={fileTreeOpen}
+        previewOpen={previewOpen}
+        previewSupported={previewSupported}
+        previewRunning={previewRunning}
+        previewStarting={previewStarting}
+        previewStopping={previewStopping}
+        onStartPreview={handleStartPreview}
+        onStopPreview={stopPreview}
+      />
+
+      <PreviewPanel
+        open={previewOpen}
+        onClose={togglePreview}
+        url={preview?.url ?? null}
+        framework={preview?.framework ?? null}
+        status={preview?.status ?? "stopped"}
+        logs={previewLogs}
+        starting={previewStarting}
+        stopping={previewStopping}
+        error={previewError}
+        onStop={stopPreview}
       />
 
       <FileTreePanel
@@ -183,6 +240,13 @@ export default function ChatPage({
         loading={treeLoading}
         error={treeError}
         onRefresh={refreshTree}
+        projectName={projectName}
+      />
+
+      <ProjectSettingsDrawer
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        projectId={projectId}
         projectName={projectName}
       />
     </div>

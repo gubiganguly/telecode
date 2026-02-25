@@ -7,6 +7,7 @@ import { wsManager } from "./websocket";
 import { DEFAULT_MODEL } from "./constants";
 import type { ProjectInfo, SessionInfo } from "@/types/api";
 import type { ChatMessage, OutboundEvent } from "@/types/chat";
+import { notify } from "./notifications";
 
 interface AppState {
   // Projects
@@ -33,7 +34,7 @@ interface AppState {
   // Project actions
   fetchProjects: () => Promise<void>;
   fetchProject: (id: string) => Promise<void>;
-  createProject: (name: string, description?: string) => Promise<ProjectInfo>;
+  createProject: (name: string, description?: string, useTemplate?: boolean) => Promise<ProjectInfo>;
   deleteProject: (id: string, deleteFiles?: boolean, deleteRepo?: boolean) => Promise<void>;
 
   // Session actions
@@ -127,8 +128,8 @@ export const useStore = create<AppState>()(
       }
     },
 
-    createProject: async (name: string, description?: string) => {
-      const project = await api.createProject({ name, description });
+    createProject: async (name: string, description?: string, useTemplate?: boolean) => {
+      const project = await api.createProject({ name, description, use_template: useTemplate });
       set((s) => {
         s.projects.unshift(project);
         s.projectsTotal++;
@@ -174,12 +175,25 @@ export const useStore = create<AppState>()(
     },
 
     setActiveSession: (sessionId: string | null) => {
+      const prevSessionId = get().activeSessionId;
+
       set((s) => {
         s.activeSessionId = sessionId;
         if (sessionId !== null) {
           s.isDraftMode = false;
         }
       });
+
+      // Unsubscribe from previous session's task
+      if (prevSessionId && prevSessionId !== sessionId) {
+        wsManager.send({ type: "unsubscribe", session_id: prevSessionId });
+      }
+
+      // Subscribe to new session's task (will get replay if one is running)
+      if (sessionId) {
+        wsManager.send({ type: "subscribe", session_id: sessionId });
+      }
+
       // Fetch persisted messages if not already loaded
       if (sessionId && !get().messagesLoaded[sessionId]) {
         get().fetchMessages(sessionId);
@@ -353,6 +367,34 @@ export const useStore = create<AppState>()(
     },
 
     handleWsEvent: (event: OutboundEvent) => {
+      // Handle task_replay — replay all buffered events from a background task
+      if (event.type === "task_replay") {
+        const { session_id: replaySid, events, is_complete } = event;
+
+        // Keep user messages, drop any incomplete assistant messages
+        // (the replay will rebuild the assistant turn from scratch)
+        set((s) => {
+          const existing = s.messages[replaySid] || [];
+          s.messages[replaySid] = existing.filter(
+            (m) => m.role === "user"
+          );
+          s.messagesLoaded[replaySid] = true;
+        });
+
+        // Replay each buffered event through the normal handler
+        for (const bufferedEvent of events) {
+          get().handleWsEvent(bufferedEvent as OutboundEvent);
+        }
+
+        // If the task is already complete, make sure streaming state reflects that
+        if (is_complete) {
+          set((s) => {
+            s.isStreaming[replaySid] = false;
+          });
+        }
+        return;
+      }
+
       const sid =
         "session_id" in event ? (event.session_id as string) : null;
 
@@ -494,6 +536,12 @@ export const useStore = create<AppState>()(
               last.isComplete = true;
               last.usage = event.usage;
               last.costUsd = event.cost_usd;
+              // If no text was streamed but result_text has content, use it.
+              // This catches cases like plan mode where the CLI sends the
+              // final text only in the result message, not via text_delta.
+              if (!last.content && event.result_text) {
+                last.content = event.result_text;
+              }
               // Mark any tools that didn't receive an explicit tool_result
               for (const tool of last.toolUses) {
                 if (!tool.isComplete) tool.isComplete = true;
@@ -549,6 +597,32 @@ export const useStore = create<AppState>()(
           }
         }
       });
+
+      // Browser notifications for background / hidden-tab events
+      if (
+        sid &&
+        (event.type === "message_complete" || event.type === "input_required")
+      ) {
+        const state = get();
+        const session = state.sessions.find((s) => s.id === sid);
+        const sessionName = session?.name || "Chat";
+
+        if (event.type === "message_complete") {
+          notify(sessionName, {
+            body: "Claude finished responding",
+            tag: `complete-${sid}`,
+            activeSessionId: state.activeSessionId ?? undefined,
+            eventSessionId: sid,
+          });
+        } else {
+          notify(sessionName, {
+            body: "Claude has a question for you",
+            tag: `input-${sid}`,
+            activeSessionId: state.activeSessionId ?? undefined,
+            eventSessionId: sid,
+          });
+        }
+      }
     },
   }))
 );

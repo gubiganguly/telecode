@@ -58,17 +58,40 @@ Your Local Files
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
 - A domain on Cloudflare (for public access)
 
-### 1. Clone and setup
+### One-line install (recommended)
 
 ```bash
-git clone https://github.com/gubiganguly/casperbot.git
-cd casperbot
+curl -sL https://raw.githubusercontent.com/gubiganguly/CasperBot/main/install.sh | bash
+```
+
+This will:
+1. Create `~/CasperBot/Claude Code Projects/` directory structure
+2. Clone the repo into `~/CasperBot/Claude Code Projects/CasperBot/`
+3. Install all dependencies (Node.js, Python, cloudflared, Claude CLI)
+4. Set up the backend virtual environment and frontend packages
+5. Prompt you for your domain and login password
+6. Optionally install the auto-restart service
+
+Once complete:
+
+```bash
+cd ~/CasperBot/Claude\ Code\ Projects/CasperBot
+./start.sh
+```
+
+### Manual install
+
+If you prefer to clone manually:
+
+```bash
+git clone https://github.com/gubiganguly/CasperBot.git
+cd CasperBot
 ./setup.sh
 ```
 
 The setup script installs all dependencies, creates the virtual environment, and prompts you for your domain and login password.
 
-### 2. Start everything
+### Start everything
 
 ```bash
 ./start.sh
@@ -76,12 +99,12 @@ The setup script installs all dependencies, creates the virtual environment, and
 
 Starts backend (port 8000), frontend (port 3000), and Cloudflare Tunnel. Health-checks each service before proceeding.
 
-### 3. Access
+### Access
 
 - **Local:** [http://localhost:3000](http://localhost:3000)
 - **Public:** `https://yourdomain.com` (via Cloudflare Tunnel)
 
-### 4. Auto-restart on boot (recommended)
+### Auto-restart on boot (recommended)
 
 ```bash
 ./service/install.sh
@@ -93,7 +116,7 @@ Installs a launchd service that runs a watchdog monitor. The monitor:
 - Auto-restarts any process that crashes — recovery within seconds
 - Backs off after 10 consecutive failures to avoid log spam
 
-### 5. Management
+### Management
 
 ```bash
 ./status.sh                  # Check what's running (including monitor)
@@ -157,10 +180,11 @@ casperbot/
 │   ├── install.sh                 # Register with launchctl
 │   └── uninstall.sh               # Unregister
 │
+├── install.sh                     # One-line installer (clones + setup)
+├── setup.sh                       # Interactive first-time setup (deps + config)
 ├── start.sh                       # Manual start (delegates to scripts/)
 ├── stop.sh                        # Stop everything (monitor + services)
 ├── status.sh                      # Check what's running
-├── setup.sh                       # Interactive first-time setup
 ├── .env.production                # Production env vars (gitignored)
 └── codebase-docs/                 # Auto-generated architecture docs
 ```

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { WifiOff } from "lucide-react";
 import { wsManager, type ConnectionStatus as WsStatus } from "@/lib/websocket";
@@ -9,15 +9,25 @@ import { isAuthenticated } from "@/lib/auth";
 export function ConnectionStatus() {
   const [status, setStatus] = useState<WsStatus>("disconnected");
   const [mounted, setMounted] = useState(false);
+  const hasConnected = useRef(false);
 
   useEffect(() => {
     setMounted(true);
-    setStatus(wsManager.getStatus());
-    return wsManager.onStatusChange(setStatus);
+    const current = wsManager.getStatus();
+    setStatus(current);
+    if (current === "connected") hasConnected.current = true;
+
+    return wsManager.onStatusChange((s) => {
+      if (s === "connected") hasConnected.current = true;
+      setStatus(s);
+    });
   }, []);
 
+  // Only show the banner after we've been connected at least once —
+  // the initial disconnected → connecting → connected is normal startup
   const show =
     mounted &&
+    hasConnected.current &&
     isAuthenticated() &&
     (status === "reconnecting" || status === "disconnected");
 

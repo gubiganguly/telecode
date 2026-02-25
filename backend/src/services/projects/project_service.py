@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import shutil
 import subprocess
 import uuid
@@ -8,7 +9,10 @@ from pathlib import Path
 from ...core.config import settings
 from ...core.database import db
 from ...core.exceptions import ProjectAlreadyExistsError, ProjectNotFoundError, SystemProjectError
+from ...services.preview.detector import detect as detect_preview
 from ...utils.helpers import slugify
+
+logger = logging.getLogger(__name__)
 
 
 class ProjectService:
@@ -32,7 +36,7 @@ class ProjectService:
         )
         return enriched, total
 
-    async def create_project(self, name: str, description: str = "") -> dict:
+    async def create_project(self, name: str, description: str = "", use_template: bool = True) -> dict:
         slug = slugify(name)
         project_path = settings.projects_dir / slug
 
@@ -53,7 +57,7 @@ class ProjectService:
         now = datetime.now(timezone.utc).isoformat()
 
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, self._create_project_folder, project_path)
+        await loop.run_in_executor(None, self._create_project_folder, project_path, use_template)
 
         await db.conn.execute(
             """INSERT INTO projects (id, name, slug, path, description, created_at, updated_at)
@@ -153,16 +157,22 @@ class ProjectService:
         await loop.run_in_executor(None, _init)
         return await self.get_project(project_id)
 
-    def _create_project_folder(self, project_path: Path) -> None:
-        """Synchronous: create project dir, copy .claude/ template, git init."""
+    def _create_project_folder(self, project_path: Path, use_template: bool = True) -> None:
+        """Synchronous: create project dir, optionally copy .claude/ template, git init."""
         project_path.mkdir(parents=True)
 
-        template_claude_dir = settings.templates_dir / ".claude"
-        if template_claude_dir.exists():
-            shutil.copytree(
-                str(template_claude_dir),
-                str(project_path / ".claude"),
-            )
+        if use_template:
+            template_claude_dir = settings.templates_dir / ".claude"
+            if template_claude_dir.exists():
+                shutil.copytree(
+                    str(template_claude_dir),
+                    str(project_path / ".claude"),
+                )
+        else:
+            # Create a bare .claude/ with an empty CLAUDE.md
+            claude_dir = project_path / ".claude"
+            claude_dir.mkdir(parents=True)
+            (claude_dir / "CLAUDE.md").write_text("", encoding="utf-8")
 
         subprocess.run(
             ["git", "init"],
@@ -291,7 +301,7 @@ class ProjectService:
 
         loop = asyncio.get_event_loop()
 
-        def _get_info() -> tuple[int, bool, str | None]:
+        def _get_info() -> tuple[int, bool, str | None, dict | None]:
             file_count = sum(
                 1
                 for f in path.rglob("*")
@@ -305,14 +315,26 @@ class ProjectService:
                     content = head_file.read_text().strip()
                     if content.startswith("ref: refs/heads/"):
                         git_branch = content.removeprefix("ref: refs/heads/")
-            return file_count, has_git, git_branch
+            # Preview detection
+            try:
+                detection = detect_preview(path)
+                preview = {
+                    "supported": detection.supported,
+                    "framework": detection.framework,
+                    "needs_install": detection.needs_install,
+                    "subdir": detection.subdir,
+                }
+            except Exception:
+                preview = None
+            return file_count, has_git, git_branch, preview
 
-        file_count, has_git, git_branch = await loop.run_in_executor(
+        file_count, has_git, git_branch, preview = await loop.run_in_executor(
             None, _get_info
         )
         project["file_count"] = file_count
         project["has_git"] = has_git
         project["git_branch"] = git_branch
+        project["preview"] = preview
         project["github_repo_url"] = project.get("github_repo_url", "")
         project["is_pinned"] = bool(project.get("is_pinned", 0))
         project["is_system"] = bool(project.get("is_system", 0))
@@ -320,40 +342,37 @@ class ProjectService:
 
     async def _sync_filesystem_to_db(self) -> None:
         """Register any project folders on disk that aren't in the DB yet."""
-        if not settings.projects_dir.exists():
-            return
+        try:
+            if not settings.projects_dir.exists():
+                return
 
-        loop = asyncio.get_event_loop()
+            loop = asyncio.get_event_loop()
 
-        def _scan() -> list[Path]:
-            return [
-                item
-                for item in settings.projects_dir.iterdir()
-                if item.is_dir() and not item.name.startswith(".")
-            ]
+            def _scan() -> list[Path]:
+                return [
+                    item
+                    for item in settings.projects_dir.iterdir()
+                    if item.is_dir() and not item.name.startswith(".")
+                ]
 
-        folders = await loop.run_in_executor(None, _scan)
+            folders = await loop.run_in_executor(None, _scan)
 
-        for folder in folders:
-            async with db.conn.execute(
-                "SELECT id FROM projects WHERE slug = ?", (folder.name,)
-            ) as cursor:
-                if await cursor.fetchone():
-                    continue
-
-            project_id = str(uuid.uuid4())
-            now = datetime.now(timezone.utc).isoformat()
-            await db.conn.execute(
-                """INSERT INTO projects (id, name, slug, path, description, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    project_id,
-                    folder.name,
-                    folder.name,
-                    str(folder),
-                    "",
-                    now,
-                    now,
-                ),
-            )
-        await db.conn.commit()
+            for folder in folders:
+                project_id = str(uuid.uuid4())
+                now = datetime.now(timezone.utc).isoformat()
+                await db.conn.execute(
+                    """INSERT OR IGNORE INTO projects (id, name, slug, path, description, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        project_id,
+                        folder.name,
+                        folder.name,
+                        str(folder),
+                        "",
+                        now,
+                        now,
+                    ),
+                )
+            await db.conn.commit()
+        except Exception:
+            logger.warning("Failed to sync filesystem to DB", exc_info=True)

@@ -26,7 +26,7 @@ class SessionBusyError(CasperBotError):
     status_code = 409
 
 
-class ApiKeyNotFoundError(CasperBotError):
+class CredentialNotFoundError(CasperBotError):
     status_code = 404
 
 
@@ -60,6 +60,22 @@ class GitHubApiError(CasperBotError):
 
 class SystemProjectError(CasperBotError):
     status_code = 403
+
+
+class PreviewNotFoundError(CasperBotError):
+    status_code = 404
+
+
+class PreviewAlreadyRunningError(CasperBotError):
+    status_code = 409
+
+
+class PreviewStartError(CasperBotError):
+    status_code = 500
+
+
+class PreviewNotSupportedError(CasperBotError):
+    status_code = 422
 
 
 def register_exception_handlers(app: FastAPI) -> None:

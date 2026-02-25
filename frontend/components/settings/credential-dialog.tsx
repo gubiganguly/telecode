@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import type { ApiKeyInfo } from "@/types/api";
+import type { CredentialInfo } from "@/types/api";
 
 const SERVICE_PRESETS: { label: string; service: string; envVar: string }[] = [
   { label: "Anthropic", service: "anthropic", envVar: "ANTHROPIC_API_KEY" },
@@ -14,7 +14,7 @@ const SERVICE_PRESETS: { label: string; service: string; envVar: string }[] = [
   { label: "Stripe", service: "stripe", envVar: "STRIPE_SECRET_KEY" },
 ];
 
-interface ApiKeyDialogProps {
+interface CredentialDialogProps {
   open: boolean;
   onClose: () => void;
   onSave: (data: {
@@ -23,15 +23,15 @@ interface ApiKeyDialogProps {
     env_var: string;
     value: string;
   }) => Promise<void>;
-  editKey?: ApiKeyInfo | null;
+  editCredential?: CredentialInfo | null;
 }
 
-export function ApiKeyDialog({
+export function CredentialDialog({
   open,
   onClose,
   onSave,
-  editKey,
-}: ApiKeyDialogProps) {
+  editCredential,
+}: CredentialDialogProps) {
   const [name, setName] = useState("");
   const [service, setService] = useState("");
   const [envVar, setEnvVar] = useState("");
@@ -41,10 +41,10 @@ export function ApiKeyDialog({
 
   useEffect(() => {
     if (open) {
-      if (editKey) {
-        setName(editKey.name);
-        setService(editKey.service);
-        setEnvVar(editKey.env_var);
+      if (editCredential) {
+        setName(editCredential.name);
+        setService(editCredential.service);
+        setEnvVar(editCredential.env_var);
         setValue("");
       } else {
         setName("");
@@ -54,7 +54,7 @@ export function ApiKeyDialog({
       }
       setError("");
     }
-  }, [open, editKey]);
+  }, [open, editCredential]);
 
   const handlePresetSelect = (preset: (typeof SERVICE_PRESETS)[number]) => {
     setService(preset.service);
@@ -68,8 +68,8 @@ export function ApiKeyDialog({
       setError("Name, service, and env variable are required");
       return;
     }
-    if (!editKey && !value.trim()) {
-      setError("API key value is required");
+    if (!editCredential && !value.trim()) {
+      setError("Credential value is required");
       return;
     }
     if (!/^[A-Z][A-Z0-9_]*$/.test(envVar.trim())) {
@@ -89,7 +89,7 @@ export function ApiKeyDialog({
       onClose();
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to save API key"
+        err instanceof Error ? err.message : "Failed to save credential"
       );
     } finally {
       setSaving(false);
@@ -98,10 +98,10 @@ export function ApiKeyDialog({
 
   return (
     <Dialog open={open} onClose={onClose}>
-      <DialogTitle>{editKey ? "Edit API Key" : "Add API Key"}</DialogTitle>
+      <DialogTitle>{editCredential ? "Edit Credential" : "Add Credential"}</DialogTitle>
 
       {/* Service presets */}
-      {!editKey && (
+      {!editCredential && (
         <div className="flex flex-wrap gap-2 mb-4">
           {SERVICE_PRESETS.map((preset) => (
             <button
@@ -164,8 +164,8 @@ export function ApiKeyDialog({
 
         <div>
           <label className="block text-sm text-text-secondary mb-1.5">
-            {editKey ? "New Value" : "Value"}
-            {editKey && (
+            {editCredential ? "New Value" : "Value"}
+            {editCredential && (
               <span className="text-text-tertiary ml-1">(leave blank to keep current)</span>
             )}
           </label>
@@ -173,7 +173,7 @@ export function ApiKeyDialog({
             type="password"
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder={editKey ? "Enter new key to update" : "sk-..."}
+            placeholder={editCredential ? "Enter new value to update" : "sk-..."}
           />
         </div>
 
@@ -190,7 +190,7 @@ export function ApiKeyDialog({
             Cancel
           </Button>
           <Button type="submit" disabled={saving} className="flex-1">
-            {saving ? "Saving..." : editKey ? "Update Key" : "Add Key"}
+            {saving ? "Saving..." : editCredential ? "Update Credential" : "Add Credential"}
           </Button>
         </div>
       </form>

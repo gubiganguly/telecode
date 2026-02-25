@@ -232,7 +232,7 @@ class CommandService:
         await self._sync_command_to_projects(name, content=None)
 
     async def generate_command(
-        self, name: str, description: str, api_key_service: object
+        self, name: str, description: str, credential_service: object
     ) -> str:
         """Use Claude CLI to generate command content from a description."""
         claude_path = shutil.which(settings.claude_binary)
@@ -254,12 +254,17 @@ class CommandService:
             f"Return ONLY the markdown content. No code fences wrapping the output."
         )
 
-        env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+        # Strip ANTHROPIC_API_KEY so the CLI uses the subscription, not the
+        # user's personal API key.
+        _cli_blocked_keys = {"CLAUDECODE", "ANTHROPIC_API_KEY"}
+        env = {k: v for k, v in os.environ.items() if k not in _cli_blocked_keys}
         try:
-            key_map = await api_key_service.get_decrypted_env_map()
-            env.update(key_map)
+            key_map = await credential_service.get_decrypted_env_map()
+            for var, val in key_map.items():
+                if var != "ANTHROPIC_API_KEY":
+                    env[var] = val
         except Exception:
-            logger.warning("Failed to load API keys for generation", exc_info=True)
+            logger.warning("Failed to load credentials for generation", exc_info=True)
 
         cmd = [
             claude_path,

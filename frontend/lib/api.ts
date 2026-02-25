@@ -11,11 +11,11 @@ import type {
   SessionCreate,
   SessionUpdate,
   HealthStatus,
-  ApiKeyInfo,
-  ApiKeyListResponse,
-  ApiKeyCreate,
-  ApiKeyUpdate,
-  ApiKeyValueResponse,
+  CredentialInfo,
+  CredentialListResponse,
+  CredentialCreate,
+  CredentialUpdate,
+  CredentialValueResponse,
   CommandInfo,
   CommandListResponse,
   CommandCreate,
@@ -38,6 +38,17 @@ import type {
   GitHubRepoListResponse,
   GitHubPushResponse,
   MessageListResponse,
+  ProjectClaudeMdResponse,
+  ProjectCommandInfo,
+  ProjectCommandListResponse,
+  ProjectMcpListResponse,
+  ProjectApprovalsResponse,
+  ProjectEnvVar,
+  ProjectEnvVarsResponse,
+  GlobalApprovalsResponse,
+  TaskListResponse,
+  PreviewInfo,
+  PreviewLogsResponse,
 } from "@/types/api";
 
 class ApiClient {
@@ -161,31 +172,31 @@ class ApiClient {
     });
   }
 
-  // API Keys
-  async listApiKeys(): Promise<ApiKeyListResponse> {
-    return this.request<ApiKeyListResponse>("/api/keys");
+  // Credentials
+  async listCredentials(): Promise<CredentialListResponse> {
+    return this.request<CredentialListResponse>("/api/credentials");
   }
 
-  async createApiKey(data: ApiKeyCreate): Promise<ApiKeyInfo> {
-    return this.request<ApiKeyInfo>("/api/keys", {
+  async createCredential(data: CredentialCreate): Promise<CredentialInfo> {
+    return this.request<CredentialInfo>("/api/credentials", {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
 
-  async updateApiKey(id: string, data: ApiKeyUpdate): Promise<ApiKeyInfo> {
-    return this.request<ApiKeyInfo>(`/api/keys/${id}`, {
+  async updateCredential(id: string, data: CredentialUpdate): Promise<CredentialInfo> {
+    return this.request<CredentialInfo>(`/api/credentials/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
     });
   }
 
-  async getApiKeyValue(id: string): Promise<ApiKeyValueResponse> {
-    return this.request<ApiKeyValueResponse>(`/api/keys/${id}/value`);
+  async getCredentialValue(id: string): Promise<CredentialValueResponse> {
+    return this.request<CredentialValueResponse>(`/api/credentials/${id}/value`);
   }
 
-  async deleteApiKey(id: string): Promise<void> {
-    await fetch(`${this.baseUrl}/api/keys/${id}`, {
+  async deleteCredential(id: string): Promise<void> {
+    await fetch(`${this.baseUrl}/api/credentials/${id}`, {
       method: "DELETE",
       headers: this.authHeaders(),
     });
@@ -329,6 +340,163 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify({ branch }),
     });
+  }
+
+  // Project Settings
+  async getProjectClaudeMd(projectId: string): Promise<ProjectClaudeMdResponse> {
+    return this.request<ProjectClaudeMdResponse>(
+      `/api/projects/${projectId}/settings/claude-md`
+    );
+  }
+
+  async updateProjectClaudeMd(projectId: string, content: string): Promise<ProjectClaudeMdResponse> {
+    return this.request<ProjectClaudeMdResponse>(
+      `/api/projects/${projectId}/settings/claude-md`,
+      { method: "PUT", body: JSON.stringify({ content }) }
+    );
+  }
+
+  async getProjectCommands(projectId: string): Promise<ProjectCommandListResponse> {
+    return this.request<ProjectCommandListResponse>(
+      `/api/projects/${projectId}/settings/commands`
+    );
+  }
+
+  async createProjectCommand(projectId: string, name: string, content: string): Promise<ProjectCommandInfo> {
+    return this.request<ProjectCommandInfo>(
+      `/api/projects/${projectId}/settings/commands`,
+      { method: "POST", body: JSON.stringify({ name, content }) }
+    );
+  }
+
+  async updateProjectCommand(projectId: string, name: string, content: string): Promise<ProjectCommandInfo> {
+    return this.request<ProjectCommandInfo>(
+      `/api/projects/${projectId}/settings/commands/${name}`,
+      { method: "PUT", body: JSON.stringify({ content }) }
+    );
+  }
+
+  async deleteProjectCommand(projectId: string, name: string): Promise<void> {
+    await fetch(`${this.baseUrl}/api/projects/${projectId}/settings/commands/${name}`, {
+      method: "DELETE",
+      headers: this.authHeaders(),
+    });
+  }
+
+  async getProjectMcps(projectId: string): Promise<ProjectMcpListResponse> {
+    return this.request<ProjectMcpListResponse>(
+      `/api/projects/${projectId}/settings/mcps`
+    );
+  }
+
+  async getProjectApprovals(projectId: string): Promise<ProjectApprovalsResponse> {
+    return this.request<ProjectApprovalsResponse>(
+      `/api/projects/${projectId}/settings/approvals`
+    );
+  }
+
+  async updateProjectApprovals(projectId: string, enabled: boolean | null): Promise<ProjectApprovalsResponse> {
+    return this.request<ProjectApprovalsResponse>(
+      `/api/projects/${projectId}/settings/approvals`,
+      { method: "PUT", body: JSON.stringify({ enabled }) }
+    );
+  }
+
+  // Project Env Vars
+  async getProjectEnvVars(projectId: string): Promise<ProjectEnvVarsResponse> {
+    return this.request<ProjectEnvVarsResponse>(
+      `/api/projects/${projectId}/settings/env-vars`
+    );
+  }
+
+  async createProjectEnvVar(projectId: string, name: string, env_var: string, value: string): Promise<ProjectEnvVar> {
+    return this.request<ProjectEnvVar>(
+      `/api/projects/${projectId}/settings/env-vars`,
+      { method: "POST", body: JSON.stringify({ name, env_var, value }) }
+    );
+  }
+
+  async updateProjectEnvVar(projectId: string, envVarId: string, data: { name?: string; env_var?: string; value?: string }): Promise<ProjectEnvVar> {
+    return this.request<ProjectEnvVar>(
+      `/api/projects/${projectId}/settings/env-vars/${envVarId}`,
+      { method: "PUT", body: JSON.stringify(data) }
+    );
+  }
+
+  async deleteProjectEnvVar(projectId: string, envVarId: string): Promise<void> {
+    await fetch(`${this.baseUrl}/api/projects/${projectId}/settings/env-vars/${envVarId}`, {
+      method: "DELETE",
+      headers: this.authHeaders(),
+    });
+  }
+
+  // Global Settings
+  async getGlobalApprovals(): Promise<GlobalApprovalsResponse> {
+    return this.request<GlobalApprovalsResponse>("/api/settings/approvals");
+  }
+
+  async updateGlobalApprovals(enabled: boolean): Promise<GlobalApprovalsResponse> {
+    return this.request<GlobalApprovalsResponse>("/api/settings/approvals", {
+      method: "PUT",
+      body: JSON.stringify({ enabled }),
+    });
+  }
+
+  // Credential exclusion (per-project)
+  async excludeCredential(projectId: string, envVar: string): Promise<void> {
+    await this.request(`/api/projects/${projectId}/settings/excluded-credentials`, {
+      method: "POST",
+      body: JSON.stringify({ env_var: envVar }),
+    });
+  }
+
+  async includeCredential(projectId: string, envVar: string): Promise<void> {
+    await this.request(`/api/projects/${projectId}/settings/excluded-credentials/${envVar}`, {
+      method: "DELETE",
+    });
+  }
+
+  // Background Tasks
+  async listActiveTasks(): Promise<TaskListResponse> {
+    return this.request<TaskListResponse>("/api/tasks");
+  }
+
+  async cancelTask(sessionId: string): Promise<void> {
+    await this.request(`/api/tasks/${sessionId}/cancel`, { method: "POST" });
+  }
+
+  // MCP credential installation
+  async installMcpCredential(data: { name: string; service: string; env_var: string; value: string }): Promise<void> {
+    await this.request("/api/mcps/install-credential", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Live Preview
+  async startPreview(projectId: string): Promise<PreviewInfo> {
+    return this.request<PreviewInfo>(`/api/preview/${projectId}/start`, {
+      method: "POST",
+    });
+  }
+
+  async stopPreview(projectId: string): Promise<void> {
+    await this.request(`/api/preview/${projectId}/stop`, { method: "POST" });
+  }
+
+  async getPreviewStatus(projectId: string): Promise<PreviewInfo | null> {
+    const response = await fetch(`${this.baseUrl}/api/preview/${projectId}/status`, {
+      headers: this.authHeaders(),
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    return body.data ?? null;
+  }
+
+  async getPreviewLogs(projectId: string, sinceLine: number = 0): Promise<PreviewLogsResponse> {
+    return this.request<PreviewLogsResponse>(
+      `/api/preview/${projectId}/logs?since_line=${sinceLine}`
+    );
   }
 }
 

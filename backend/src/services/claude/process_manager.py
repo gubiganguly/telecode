@@ -8,10 +8,11 @@ from pathlib import Path
 from typing import AsyncIterator
 
 from ...core.config import settings
-from ..api_keys.api_key_service import ApiKeyService
+from ..credentials.credential_service import CredentialService
 from ..sessions.session_service import SessionService
 from . import command_translator, stream_parser
 from .stream_parser import ParsedEvent
+from .system_context import CASPERBOT_SYSTEM_CONTEXT
 
 logger = logging.getLogger(__name__)
 
@@ -31,12 +32,12 @@ class ProcessManager:
     def __init__(
         self,
         session_service: SessionService,
-        api_key_service: ApiKeyService,
+        credential_service: CredentialService,
     ) -> None:
         self._processes: dict[str, RunningProcess] = {}
         self._lock = asyncio.Lock()
         self._session_service = session_service
-        self._api_key_service = api_key_service
+        self._credential_service = credential_service
 
     @property
     def active_count(self) -> int:
@@ -59,12 +60,23 @@ class ProcessManager:
         """Spawn a ``claude -p`` process and yield parsed stream events."""
 
         prompt = command_translator.translate(message)
+
+        # Resolve effective approvals: project override → global default → False
+        approvals_enabled = False
+        try:
+            from ..project_settings.project_settings_service import ProjectSettingsService
+            ps_svc = ProjectSettingsService()
+            approvals_enabled = await ps_svc.resolve_approvals(project_id)
+        except Exception:
+            logger.debug("Failed to check approvals setting, defaulting to off")
+
         cmd = self._build_command(
             session_id=session_id,
             prompt=prompt,
             model=model,
             max_budget_usd=max_budget_usd,
             is_continuation=is_continuation,
+            approvals_enabled=approvals_enabled,
         )
 
         logger.info("Running CLI command for session %s: %s", session_id, " ".join(cmd))
@@ -95,17 +107,39 @@ class ProcessManager:
             )
             return
 
-        # Build a clean env — unset CLAUDECODE to avoid nesting detection
-        env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+        # Build a clean env — unset CLAUDECODE to avoid nesting detection,
+        # and strip ANTHROPIC_API_KEY so the CLI uses the Claude Code
+        # subscription instead of the user's personal API key.
+        _cli_blocked_keys = {"CLAUDECODE", "ANTHROPIC_API_KEY"}
+        env = {k: v for k, v in os.environ.items() if k not in _cli_blocked_keys}
 
-        # Inject stored API keys as environment variables
-        api_keys_loaded = False
+        # Inject stored credentials as environment variables (excluding
+        # ANTHROPIC_API_KEY — that key is only used server-side for
+        # title generation, never passed to the CLI).
+        # Also respect per-project credential exclusions.
         try:
-            api_keys = await self._api_key_service.get_decrypted_env_map()
-            env.update(api_keys)
-            api_keys_loaded = bool(api_keys)
+            creds = await self._credential_service.get_decrypted_env_map()
+            # Load per-project exclusions
+            excluded: set[str] = set()
+            try:
+                from ..project_settings.project_settings_service import ProjectSettingsService
+                excluded = set(await ProjectSettingsService().list_excluded_credentials(project_id))
+            except Exception:
+                logger.debug("Failed to load credential exclusions", exc_info=True)
+            for var, val in creds.items():
+                if var != "ANTHROPIC_API_KEY" and var not in excluded:
+                    env[var] = val
         except Exception:
-            logger.warning("Failed to load API keys for injection", exc_info=True)
+            logger.warning("Failed to load credentials for injection", exc_info=True)
+
+        # Inject project-scoped env vars (override global on conflict)
+        try:
+            from ..project_settings.project_settings_service import ProjectSettingsService
+            project_env = await ProjectSettingsService().get_decrypted_env_map(project_id)
+            for var, val in project_env.items():
+                env[var] = val
+        except Exception:
+            logger.debug("Failed to load project env vars", exc_info=True)
 
         # Run the CLI — if resume fails silently, retry as a new session
         async for event in self._run_cli(
@@ -118,6 +152,7 @@ class ProcessManager:
             prompt=prompt,
             model=model,
             max_budget_usd=max_budget_usd,
+            approvals_enabled=approvals_enabled,
         ):
             yield event
 
@@ -132,6 +167,7 @@ class ProcessManager:
         prompt: str,
         model: str | None,
         max_budget_usd: float | None,
+        approvals_enabled: bool = False,
     ) -> AsyncIterator[ParsedEvent]:
         """Execute the CLI subprocess and stream events.
 
@@ -249,6 +285,7 @@ class ProcessManager:
                         model=model,
                         max_budget_usd=max_budget_usd,
                         is_continuation=False,
+                        approvals_enabled=approvals_enabled,
                     )
                     # Remove from active processes before retry
                     async with self._lock:
@@ -263,6 +300,7 @@ class ProcessManager:
                         prompt=prompt,
                         model=model,
                         max_budget_usd=max_budget_usd,
+                        approvals_enabled=approvals_enabled,
                     ):
                         yield event
                     return
@@ -356,6 +394,7 @@ class ProcessManager:
         model: str | None,
         max_budget_usd: float | None,
         is_continuation: bool = False,
+        approvals_enabled: bool = False,
     ) -> list[str]:
         cmd = [
             settings.claude_binary,
@@ -382,17 +421,22 @@ class ProcessManager:
             cmd.extend(["--fallback-model", settings.fallback_model])
 
         # Pre-approve all tools so the CLI never blocks for permission
-        cmd.extend([
-            "--allowedTools",
-            "Read",
-            "Write",
-            "Edit",
-            "Glob",
-            "Grep",
-            "Bash(*)",
-            "WebFetch",
-            "WebSearch",
-            "NotebookEdit",
-        ])
+        # (unless the user has enabled approvals for this project)
+        if not approvals_enabled:
+            cmd.extend([
+                "--allowedTools",
+                "Read",
+                "Write",
+                "Edit",
+                "Glob",
+                "Grep",
+                "Bash(*)",
+                "WebFetch",
+                "WebSearch",
+                "NotebookEdit",
+            ])
+
+        # Inject CasperBot system context so Claude is always self-aware
+        cmd.extend(["--append-system-prompt", CASPERBOT_SYSTEM_CONTEXT])
 
         return cmd

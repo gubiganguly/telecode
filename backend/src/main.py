@@ -105,27 +105,46 @@ async def lifespan(app: FastAPI):
     from .services.projects.project_service import ProjectService
     from .services.messages.message_service import MessageService
     from .services.claude.process_manager import ProcessManager
-    from .services.api_keys.api_key_service import ApiKeyService
+    from .services.tasks.task_manager import TaskManager
+    from .services.credentials.credential_service import CredentialService
     from .services.commands.command_service import CommandService
     from .services.mcps.mcp_service import McpService
     from .services.claude_md.claude_md_service import ClaudeMdService
     from .services.github.github_service import GitHubService
+    from .services.preview.caddy_client import CaddyClient
+    from .services.preview.preview_service import PreviewService
 
     app.state.session_service = SessionService()
     app.state.project_service = ProjectService()
     app.state.message_service = MessageService()
-    app.state.api_key_service = ApiKeyService()
+    app.state.credential_service = CredentialService()
     app.state.command_service = CommandService()
     app.state.mcp_service = McpService()
     app.state.claude_md_service = ClaudeMdService()
     app.state.github_service = GitHubService()
     app.state.process_manager = ProcessManager(
-        app.state.session_service, app.state.api_key_service
+        app.state.session_service, app.state.credential_service
     )
+    app.state.task_manager = TaskManager(
+        process_manager=app.state.process_manager,
+        message_service=app.state.message_service,
+        session_service=app.state.session_service,
+    )
+    await app.state.task_manager.startup()
+
+    caddy = CaddyClient(
+        admin_url=settings.preview_caddy_admin_url,
+        listen_port=settings.preview_caddy_listen_port,
+        domain=settings.preview_domain,
+    )
+    app.state.preview_service = PreviewService(caddy)
+    await app.state.preview_service.startup()
 
     yield
 
     # Shutdown
+    await app.state.preview_service.shutdown()
+    await app.state.task_manager.shutdown()
     await app.state.process_manager.cleanup_all()
     await db.disconnect()
 
@@ -160,7 +179,7 @@ app.include_router(github_public_router)
 from .api.projects.router import router as projects_router
 from .api.sessions.router import router as sessions_router
 from .api.chat.router import router as chat_router
-from .api.api_keys.router import router as api_keys_router
+from .api.credentials.router import router as credentials_router
 from .api.commands.router import router as commands_router
 from .api.mcps.router import router as mcps_router
 from .api.files.router import router as files_router
@@ -168,12 +187,16 @@ from .api.claude_md.router import router as claude_md_router
 from .api.mentions.router import router as mentions_router
 from .api.github.router import router as github_router
 from .api.messages.router import router as messages_router
+from .api.project_settings.router import router as project_settings_router
+from .api.settings.router import router as settings_router
+from .api.tasks.router import router as tasks_router
+from .api.preview.router import router as preview_router
 
 _auth = [Depends(get_current_user)]
 app.include_router(projects_router, dependencies=_auth)
 app.include_router(sessions_router, dependencies=_auth)
 app.include_router(chat_router)  # WebSocket handles its own auth
-app.include_router(api_keys_router, dependencies=_auth)
+app.include_router(credentials_router, dependencies=_auth)
 app.include_router(commands_router, dependencies=_auth)
 app.include_router(mcps_router, dependencies=_auth)
 app.include_router(files_router, dependencies=_auth)
@@ -181,3 +204,7 @@ app.include_router(claude_md_router, dependencies=_auth)
 app.include_router(mentions_router, dependencies=_auth)
 app.include_router(github_router, dependencies=_auth)
 app.include_router(messages_router, dependencies=_auth)
+app.include_router(project_settings_router, dependencies=_auth)
+app.include_router(settings_router, dependencies=_auth)
+app.include_router(tasks_router, dependencies=_auth)
+app.include_router(preview_router, dependencies=_auth)

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Plus, MessageSquare, X } from "lucide-react";
+import { ArrowLeft, Plus, MessageSquare, X, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { SessionItem } from "@/components/sessions/session-item";
@@ -9,6 +9,8 @@ import { getDateGroup } from "@/lib/utils";
 import { useMobile } from "@/hooks/use-mobile";
 import type { SessionInfo } from "@/types/api";
 import type { SessionStatus } from "@/types/chat";
+import { ActiveTasksIndicator } from "@/components/tasks/active-tasks-indicator";
+import { NotificationToggle } from "@/components/ui/notification-toggle";
 
 function getSessionStatus(
   sessionId: string,
@@ -32,6 +34,7 @@ interface SessionSidebarProps {
   projectName: string;
   streamingSessions: Record<string, boolean>;
   waitingSessions: Record<string, boolean>;
+  onOpenSettings?: () => void;
 }
 
 export function SessionSidebar({
@@ -46,6 +49,7 @@ export function SessionSidebar({
   projectName,
   streamingSessions,
   waitingSessions,
+  onOpenSettings,
 }: SessionSidebarProps) {
   const router = useRouter();
   const isMobile = useMobile();
@@ -85,10 +89,23 @@ export function SessionSidebar({
       </div>
 
       {/* Project name */}
-      <div className="px-4 py-3 border-b border-border">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <h2 className="text-sm font-semibold text-text-primary truncate">
           {projectName}
         </h2>
+        <div className="flex items-center gap-1">
+          <ActiveTasksIndicator />
+          <NotificationToggle />
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              className="p-1.5 rounded-md hover:bg-bg-tertiary text-text-tertiary hover:text-text-secondary transition-colors cursor-pointer"
+              title="Project Settings"
+            >
+              <Settings size={15} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* New chat button */}

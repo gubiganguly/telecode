@@ -4,6 +4,28 @@ export interface APIResponse<T> {
   error: string | null;
 }
 
+export interface PreviewDetection {
+  supported: boolean;
+  framework: string | null;
+  needs_install: boolean;
+  subdir: string | null;
+}
+
+export interface PreviewInfo {
+  project_id: string;
+  port: number;
+  framework: string | null;
+  status: "running" | "stopped" | "error";
+  url: string | null;
+  started_at: string | null;
+  error: string | null;
+}
+
+export interface PreviewLogsResponse {
+  logs: string[];
+  total_lines: number;
+}
+
 export interface ProjectInfo {
   id: string;
   name: string;
@@ -18,6 +40,7 @@ export interface ProjectInfo {
   github_repo_url: string;
   is_pinned: boolean;
   is_system: boolean;
+  preview?: PreviewDetection | null;
 }
 
 export interface ProjectListResponse {
@@ -28,6 +51,7 @@ export interface ProjectListResponse {
 export interface ProjectCreate {
   name: string;
   description?: string;
+  use_template?: boolean;
 }
 
 export interface ProjectUpdate {
@@ -69,8 +93,8 @@ export interface HealthStatus {
   version: string;
 }
 
-// API Keys
-export interface ApiKeyInfo {
+// Credentials
+export interface CredentialInfo {
   id: string;
   name: string;
   service: string;
@@ -80,27 +104,33 @@ export interface ApiKeyInfo {
   updated_at: string;
 }
 
-export interface ApiKeyValueResponse {
+export interface CredentialValueResponse {
   value: string;
 }
 
-export interface ApiKeyListResponse {
-  keys: ApiKeyInfo[];
+export interface CredentialListResponse {
+  credentials: CredentialInfo[];
   total: number;
 }
 
-export interface ApiKeyCreate {
+export interface CredentialCreate {
   name: string;
   service: string;
   env_var: string;
   value: string;
 }
 
-export interface ApiKeyUpdate {
+export interface CredentialUpdate {
   name?: string;
   service?: string;
   env_var?: string;
   value?: string;
+}
+
+export interface MissingCredential {
+  env_var: string;
+  name: string;
+  description: string;
 }
 
 // Slash Commands
@@ -202,6 +232,7 @@ export interface McpInstallResponse {
   name: string;
   message: string;
   command_executed: string;
+  missing_credentials: MissingCredential[];
 }
 
 // CLAUDE.md
@@ -257,6 +288,73 @@ export interface GitHubPushResponse {
 
 export interface GitHubLinkRepoRequest {
   repo_url: string;
+}
+
+// Project Settings
+export interface ProjectClaudeMdResponse {
+  content: string;
+}
+
+export interface ProjectCommandInfo {
+  name: string;
+  command: string;
+  description: string;
+  content: string;
+}
+
+export interface ProjectCommandListResponse {
+  commands: ProjectCommandInfo[];
+  total: number;
+}
+
+export interface ProjectMcpListResponse {
+  mcps: McpServerConfig[];
+  total: number;
+}
+
+export interface ProjectApprovalsResponse {
+  enabled: boolean | null; // null = inherit from global
+  global_default: boolean;
+  effective: boolean;
+}
+
+// Project Env Vars
+export interface ProjectEnvVar {
+  id: string;
+  name: string;
+  env_var: string;
+  masked_value: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectEnvVarsResponse {
+  env_vars: ProjectEnvVar[];
+  global_keys: string[];
+  excluded_credentials: string[];
+  total: number;
+}
+
+// Global Settings
+export interface GlobalApprovalsResponse {
+  enabled: boolean;
+}
+
+// Background Tasks
+export interface TaskInfo {
+  session_id: string;
+  project_id: string;
+  status: "running" | "completed" | "cancelled" | "error" | "waiting_for_input";
+  started_at: string;
+  completed_at: string | null;
+  event_count: number;
+  subscriber_count: number;
+  elapsed_seconds: number;
+}
+
+export interface TaskListResponse {
+  tasks: TaskInfo[];
+  total: number;
 }
 
 // Messages

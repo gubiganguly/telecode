@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { Plus, Settings, Zap } from "lucide-react";
+import { Plus, Settings, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProjectCard } from "@/components/projects/project-card";
@@ -17,8 +17,8 @@ export default function ProjectsPage() {
   const { projects, loading, createProject, deleteProject } = useProjects();
   const [showCreate, setShowCreate] = useState(false);
 
-  const handleCreate = async (name: string, description?: string) => {
-    const project = await createProject(name, description);
+  const handleCreate = async (name: string, description?: string, useTemplate?: boolean) => {
+    const project = await createProject(name, description, useTemplate);
     router.push(`/chat/${project.id}`);
     return project;
   };
@@ -33,8 +33,8 @@ export default function ProjectsPage() {
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
           >
-            <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
-              <Zap size={16} className="text-white" />
+            <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-lg">
+              👻
             </div>
             <h1 className="text-lg font-semibold text-text-primary">
               CasperBot
@@ -46,6 +46,11 @@ export default function ProjectsPage() {
             initial={{ opacity: 0, x: 10 }}
             animate={{ opacity: 1, x: 0 }}
           >
+            <Link href="/help">
+              <Button variant="ghost" size="icon-sm">
+                <HelpCircle size={18} />
+              </Button>
+            </Link>
             <Link href="/settings">
               <Button variant="ghost" size="icon-sm">
                 <Settings size={18} />

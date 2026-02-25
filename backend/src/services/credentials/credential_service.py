@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 from ...core.database import db
 from ...core.encryption import decrypt, encrypt
-from ...core.exceptions import ApiKeyNotFoundError
+from ...core.exceptions import CredentialNotFoundError
 
 
 def _mask_value(plaintext: str) -> str:
@@ -13,10 +13,10 @@ def _mask_value(plaintext: str) -> str:
     return "*" * (len(plaintext) - 4) + plaintext[-4:]
 
 
-class ApiKeyService:
+class CredentialService:
     async def list_keys(self) -> tuple[list[dict], int]:
         async with db.conn.execute(
-            "SELECT * FROM api_keys ORDER BY created_at DESC"
+            "SELECT * FROM credentials ORDER BY created_at DESC"
         ) as cursor:
             rows = await cursor.fetchall()
 
@@ -41,7 +41,7 @@ class ApiKeyService:
         encrypted = encrypt(value)
 
         await db.conn.execute(
-            """INSERT INTO api_keys (id, name, service, env_var, encrypted_value, created_at, updated_at)
+            """INSERT INTO credentials (id, name, service, env_var, encrypted_value, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (key_id, name, service, env_var, encrypted, now, now),
         )
@@ -59,11 +59,11 @@ class ApiKeyService:
 
     async def get_key(self, key_id: str) -> dict:
         async with db.conn.execute(
-            "SELECT * FROM api_keys WHERE id = ?", (key_id,)
+            "SELECT * FROM credentials WHERE id = ?", (key_id,)
         ) as cursor:
             row = await cursor.fetchone()
         if not row:
-            raise ApiKeyNotFoundError(f"API key not found: {key_id}")
+            raise CredentialNotFoundError(f"Credential not found: {key_id}")
         r = dict(row)
         decrypted = decrypt(r.pop("encrypted_value"))
         r["masked_value"] = _mask_value(decrypted)
@@ -101,38 +101,38 @@ class ApiKeyService:
         params.append(key_id)
 
         result = await db.conn.execute(
-            f"UPDATE api_keys SET {', '.join(updates)} WHERE id = ?",
+            f"UPDATE credentials SET {', '.join(updates)} WHERE id = ?",
             tuple(params),
         )
         await db.conn.commit()
 
         if result.rowcount == 0:
-            raise ApiKeyNotFoundError(f"API key not found: {key_id}")
+            raise CredentialNotFoundError(f"Credential not found: {key_id}")
 
         return await self.get_key(key_id)
 
     async def delete_key(self, key_id: str) -> None:
         result = await db.conn.execute(
-            "DELETE FROM api_keys WHERE id = ?", (key_id,)
+            "DELETE FROM credentials WHERE id = ?", (key_id,)
         )
         await db.conn.commit()
         if result.rowcount == 0:
-            raise ApiKeyNotFoundError(f"API key not found: {key_id}")
+            raise CredentialNotFoundError(f"Credential not found: {key_id}")
 
     async def get_decrypted_value(self, key_id: str) -> str:
         """Return the decrypted value for a single key."""
         async with db.conn.execute(
-            "SELECT encrypted_value FROM api_keys WHERE id = ?", (key_id,)
+            "SELECT encrypted_value FROM credentials WHERE id = ?", (key_id,)
         ) as cursor:
             row = await cursor.fetchone()
         if not row:
-            raise ApiKeyNotFoundError(f"API key not found: {key_id}")
+            raise CredentialNotFoundError(f"Credential not found: {key_id}")
         return decrypt(row["encrypted_value"])
 
     async def get_decrypted_env_map(self) -> dict[str, str]:
-        """Return {env_var: decrypted_value} for all stored keys."""
+        """Return {env_var: decrypted_value} for all stored credentials."""
         async with db.conn.execute(
-            "SELECT env_var, encrypted_value FROM api_keys"
+            "SELECT env_var, encrypted_value FROM credentials"
         ) as cursor:
             rows = await cursor.fetchall()
         return {row["env_var"]: decrypt(row["encrypted_value"]) for row in rows}

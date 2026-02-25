@@ -154,7 +154,8 @@ export function ChatInput({
       <div className="flex items-end gap-2 px-3 py-3 max-w-3xl mx-auto">
         <div
           className={cn(
-            "flex-1 relative rounded-xl border border-border bg-bg-input px-4 py-3",
+            "flex-1 relative rounded-xl border border-border bg-bg-input pl-4 py-3",
+            isSupported && !isStreaming ? "pr-11" : "pr-4",
             "focus-within:ring-2 focus-within:ring-border-focus focus-within:border-transparent",
             "transition-colors",
             disabled && "opacity-50 cursor-not-allowed"
@@ -172,23 +173,26 @@ export function ChatInput({
               setSelectedCmdIndex(0);
             }}
           />
-        </div>
 
-        {/* Mic button — only shown when browser supports Speech Recognition */}
-        {isSupported && !isStreaming && (
-          <button
-            onClick={toggleMic}
-            className={cn(
-              "shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-colors cursor-pointer",
-              isListening
-                ? "bg-error/15 text-error mic-pulse"
-                : "bg-bg-tertiary text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/80"
-            )}
-            title={isListening ? "Stop listening" : "Voice input"}
-          >
-            <Mic size={16} />
-          </button>
-        )}
+          {/* Mic button — inside input, only shown when browser supports Speech Recognition */}
+          {isSupported && !isStreaming && (
+            <button
+              onClick={toggleMic}
+              className={cn(
+                "absolute right-2 bottom-2 w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-200 cursor-pointer",
+                isListening
+                  ? "text-error mic-recording scale-105"
+                  : "text-text-tertiary hover:text-text-secondary hover:bg-white/5"
+              )}
+              title={isListening ? "Stop listening" : "Voice input"}
+            >
+              <Mic size={15} />
+              {isListening && (
+                <span className="absolute inset-0 rounded-lg border border-error/40 mic-ring" />
+              )}
+            </button>
+          )}
+        </div>
 
         {/* Send / Cancel button */}
         {isStreaming ? (

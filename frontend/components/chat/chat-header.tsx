@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Menu, Wifi, WifiOff, FolderTree, Upload, GitBranch, Github, Loader2 } from "lucide-react";
+import { Menu, Wifi, WifiOff, FolderTree, Upload, GitBranch, Github, Loader2, Play, Square, Eye } from "lucide-react";
 import { useEffect } from "react";
 import { wsManager, type ConnectionStatus } from "@/lib/websocket";
 import { useStore } from "@/lib/store";
@@ -15,8 +15,16 @@ interface ChatHeaderProps {
   sessionName: string;
   onOpenSidebar: () => void;
   onToggleFileTree: () => void;
+  onTogglePreview: () => void;
   showMenuButton: boolean;
   fileTreeOpen: boolean;
+  previewOpen: boolean;
+  previewSupported: boolean;
+  previewRunning: boolean;
+  previewStarting: boolean;
+  previewStopping: boolean;
+  onStartPreview: () => void;
+  onStopPreview: () => void;
 }
 
 export function ChatHeader({
@@ -24,8 +32,16 @@ export function ChatHeader({
   sessionName,
   onOpenSidebar,
   onToggleFileTree,
+  onTogglePreview,
   showMenuButton,
   fileTreeOpen,
+  previewOpen,
+  previewSupported,
+  previewRunning,
+  previewStarting,
+  previewStopping,
+  onStartPreview,
+  onStopPreview,
 }: ChatHeaderProps) {
   const [wsStatus, setWsStatus] = useState<ConnectionStatus>(
     wsManager.getStatus()
@@ -168,6 +184,48 @@ export function ChatHeader({
               <Upload size={13} />
             )}
             <span className="hidden sm:inline">{pushStatus || "Push"}</span>
+          </button>
+        )}
+
+        {/* Preview toggle — single button that starts or stops */}
+        {previewSupported && currentProject && (
+          <button
+            onClick={previewRunning ? onStopPreview : onStartPreview}
+            disabled={previewStarting || previewStopping}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer disabled:opacity-50",
+              previewRunning
+                ? "bg-error/10 text-error hover:bg-error/20"
+                : "bg-success/10 text-success hover:bg-success/20"
+            )}
+            title={previewRunning ? "Stop preview" : previewStarting ? "Starting preview..." : "Start live preview"}
+          >
+            {previewStarting || previewStopping ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : previewRunning ? (
+              <Square size={11} fill="currentColor" />
+            ) : (
+              <Play size={13} fill="currentColor" />
+            )}
+            <span>
+              {previewStarting ? "Starting..." : previewStopping ? "Stopping..." : previewRunning ? "Stop" : "Run"}
+            </span>
+          </button>
+        )}
+
+        {/* Open preview panel — only when running */}
+        {previewRunning && (
+          <button
+            onClick={onTogglePreview}
+            className={cn(
+              "p-1.5 rounded-md transition-colors cursor-pointer",
+              previewOpen
+                ? "bg-accent-muted text-accent"
+                : "hover:bg-bg-tertiary text-text-tertiary"
+            )}
+            title="Toggle preview panel"
+          >
+            <Eye size={16} />
           </button>
         )}
 

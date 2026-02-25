@@ -13,14 +13,14 @@ if [ -f "$PID_FILE" ] && kill -0 "$(cat "$PID_FILE")" 2>/dev/null; then
   exit 0
 fi
 
-# Kill any stale cloudflared for casperbot
-pkill -f "cloudflared tunnel run casperbot" 2>/dev/null || true
+# Kill any stale cloudflared
+pkill -f "cloudflared tunnel" 2>/dev/null || true
 sleep 1
 
 # Unset TUNNEL_TOKEN so cloudflared uses local config
 unset TUNNEL_TOKEN
 
-cloudflared tunnel run casperbot >> "$LOG_DIR/tunnel.log" 2>&1 &
+cloudflared --config /Users/clawdbot/.cloudflared/config.yml tunnel run topanga-gateway >> "$LOG_DIR/tunnel.log" 2>&1 &
 echo $! > "$PID_FILE"
 
 sleep 3

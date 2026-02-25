@@ -10,6 +10,7 @@ import { ThinkingBlock } from "./thinking-block";
 import { ToolUseCard } from "./tool-use-card";
 import { TodoCard } from "./todo-card";
 import { AskUserQuestionCard } from "./ask-user-question-card";
+import { PlanCard, EnterPlanCard } from "./plan-card";
 import { MarkdownRenderer } from "./markdown-renderer";
 import type { ChatMessage as ChatMessageType } from "@/types/chat";
 
@@ -85,6 +86,10 @@ export const ChatMessage = memo(function ChatMessage({
                   <TodoCard key={tool.toolId} tool={tool} />
                 ) : tool.toolName === "AskUserQuestion" ? (
                   <AskUserQuestionCard key={tool.toolId} tool={tool} />
+                ) : tool.toolName === "ExitPlanMode" ? (
+                  <PlanCard key={tool.toolId} tool={tool} allToolUses={message.toolUses} />
+                ) : tool.toolName === "EnterPlanMode" ? (
+                  <EnterPlanCard key={tool.toolId} tool={tool} />
                 ) : (
                   <ToolUseCard key={tool.toolId} tool={tool} />
                 )

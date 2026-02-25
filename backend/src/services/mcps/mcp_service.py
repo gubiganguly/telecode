@@ -10,6 +10,15 @@ from ...core.exceptions import McpInstallError, McpNotFoundError
 
 logger = logging.getLogger(__name__)
 
+# Known MCP servers and the credentials they require
+KNOWN_MCP_CREDENTIALS: dict[str, list[dict]] = {
+    "github": [{"env_var": "GITHUB_PERSONAL_ACCESS_TOKEN", "name": "GitHub Token", "description": "Personal access token from github.com/settings/tokens"}],
+    "brave-search": [{"env_var": "BRAVE_API_KEY", "name": "Brave API Key", "description": "API key from brave.com/search/api"}],
+    "slack": [{"env_var": "SLACK_BOT_TOKEN", "name": "Slack Bot Token", "description": "Bot token from api.slack.com"}],
+    "firebase": [{"env_var": "FIREBASE_TOKEN", "name": "Firebase Token", "description": "Firebase CI token"}],
+    "postgres": [{"env_var": "DATABASE_URL", "name": "PostgreSQL URL", "description": "Connection string for your database"}],
+}
+
 
 class McpService:
     async def list_mcps(self) -> list[dict]:
@@ -52,7 +61,7 @@ class McpService:
     # MCP Installation via natural language
     # ------------------------------------------------------------------
 
-    async def install_mcp(self, query: str, api_key_service: object) -> dict:
+    async def install_mcp(self, query: str, credential_service: object) -> dict:
         """Two-step install: interpret natural language → execute claude mcp add."""
         claude_path = shutil.which(settings.claude_binary)
         if claude_path is None:
@@ -61,15 +70,27 @@ class McpService:
                 "Ensure Claude Code CLI is installed."
             )
 
-        env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+        # Strip ANTHROPIC_API_KEY so the CLI uses the subscription, not the
+        # user's personal API key.
+        _cli_blocked_keys = {"CLAUDECODE", "ANTHROPIC_API_KEY"}
+        env = {k: v for k, v in os.environ.items() if k not in _cli_blocked_keys}
         try:
-            key_map = await api_key_service.get_decrypted_env_map()
-            env.update(key_map)
+            key_map = await credential_service.get_decrypted_env_map()
+            for var, val in key_map.items():
+                if var != "ANTHROPIC_API_KEY":
+                    env[var] = val
         except Exception:
-            logger.warning("Failed to load API keys for MCP install", exc_info=True)
+            logger.warning("Failed to load credentials for MCP install", exc_info=True)
 
         mcp_config = await self._interpret_mcp_query(claude_path, query, env)
-        return await self._execute_mcp_add(claude_path, mcp_config, env)
+        result = await self._execute_mcp_add(claude_path, mcp_config, env)
+
+        # Detect missing credentials for the installed MCP
+        result["missing_credentials"] = await self._detect_missing_credentials(
+            mcp_config["name"], credential_service
+        )
+
+        return result
 
     async def _interpret_mcp_query(
         self, claude_path: str, query: str, env: dict
@@ -246,3 +267,18 @@ class McpService:
             "message": f"Successfully installed MCP server '{name}'",
             "command_executed": cmd_str,
         }
+
+    async def _detect_missing_credentials(
+        self, mcp_name: str, credential_service: object
+    ) -> list[dict]:
+        """Check the known MCP registry for required credentials that are missing."""
+        required = KNOWN_MCP_CREDENTIALS.get(mcp_name, [])
+        if not required:
+            return []
+
+        try:
+            existing = await credential_service.get_decrypted_env_map()
+        except Exception:
+            existing = {}
+
+        return [cred for cred in required if cred["env_var"] not in existing]
